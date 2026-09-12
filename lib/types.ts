@@ -14,6 +14,7 @@ export interface Transaction {
   quantity: number;
   price: number;
   date: string; // ISO date
+  fee?: number; // 수수료 (+ any transfer tax on sells)
 }
 
 export type DividendStatus = "expected" | "confirmed";
@@ -35,6 +36,17 @@ export interface Holding {
   manualPrice?: number; // user-entered current price, e.g. for K-OTC stocks Yahoo doesn't cover
   transactions: Transaction[];
   dividends: Dividend[];
+  note?: string; // free-text - why bought, thesis, reminders
+  targetWeightPercent?: number; // desired allocation share, for rebalancing suggestions
+}
+
+export interface WatchlistItem {
+  id: string;
+  symbol: string;
+  name: string;
+  currency: string;
+  note?: string;
+  addedDate: string; // ISO date
 }
 
 export interface Quote {

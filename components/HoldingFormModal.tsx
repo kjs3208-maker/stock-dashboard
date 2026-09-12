@@ -10,6 +10,8 @@ export interface HoldingFormValues {
   currency: string;
   accountId?: string;
   manualPrice?: number;
+  note?: string;
+  targetWeightPercent?: number;
   // Only present when creating a brand new holding - its first buy.
   initialTransaction?: { quantity: number; price: number; date: string };
 }
@@ -20,6 +22,9 @@ interface HoldingFormModalProps {
   accounts: Account[];
   onClose: () => void;
   onSave: (values: HoldingFormValues) => void;
+  // Pre-fills symbol/name/currency for a brand-new holding, e.g. converting
+  // a watchlist entry into a real position. Ignored when editing.
+  prefill?: { symbol: string; name: string; currency: string };
 }
 
 const CURRENCIES = ["KRW", "USD", "JPY", "EUR", "HKD"];
@@ -34,21 +39,26 @@ export function HoldingFormModal({
   accounts,
   onClose,
   onSave,
+  prefill,
 }: HoldingFormModalProps) {
   // The parent remounts this component (via a changing `key`) every time the
   // modal opens, so these initializers - not an effect - are what "resets"
   // the form for a new add/edit target.
   const isEdit = !!initial;
-  const [symbol, setSymbol] = useState(initial?.symbol ?? "");
-  const [name, setName] = useState(initial?.name ?? "");
+  const [symbol, setSymbol] = useState(initial?.symbol ?? prefill?.symbol ?? "");
+  const [name, setName] = useState(initial?.name ?? prefill?.name ?? "");
   const [quantity, setQuantity] = useState("");
   const [avgBuyPrice, setAvgBuyPrice] = useState("");
-  const [currency, setCurrency] = useState(initial?.currency ?? "KRW");
+  const [currency, setCurrency] = useState(initial?.currency ?? prefill?.currency ?? "KRW");
   const [buyDate, setBuyDate] = useState(todayIso());
   const [accountId, setAccountId] = useState(initial?.accountId ?? accounts[0]?.id ?? "");
   const [useManualPrice, setUseManualPrice] = useState(initial?.manualPrice != null);
   const [manualPrice, setManualPrice] = useState(
     initial?.manualPrice != null ? String(initial.manualPrice) : ""
+  );
+  const [note, setNote] = useState(initial?.note ?? "");
+  const [targetWeightPercent, setTargetWeightPercent] = useState(
+    initial?.targetWeightPercent != null ? String(initial.targetWeightPercent) : ""
   );
   const [error, setError] = useState<string | null>(null);
 
@@ -92,6 +102,13 @@ export function HoldingFormModal({
       }
     }
 
+    const trimmedNote = note.trim();
+    const targetWeightValue = targetWeightPercent.trim() === "" ? undefined : Number(targetWeightPercent);
+    if (targetWeightValue != null && (!Number.isFinite(targetWeightValue) || targetWeightValue < 0 || targetWeightValue > 100)) {
+      setError("목표 비중은 0~100 사이의 숫자여야 합니다.");
+      return;
+    }
+
     onSave({
       id: initial?.id,
       symbol: trimmedSymbol,
@@ -99,6 +116,8 @@ export function HoldingFormModal({
       currency,
       accountId: accountId || undefined,
       manualPrice: manualPriceValue,
+      note: trimmedNote || undefined,
+      targetWeightPercent: targetWeightValue,
       initialTransaction,
     });
   }
@@ -219,6 +238,33 @@ export function HoldingFormModal({
               수량·매입가는 아래 &quot;거래 내역&quot;에서 매수/매도를 추가하며 관리합니다.
             </p>
           )}
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-ink-secondary dark:text-ink-secondary-dark">
+              메모 (매수 이유 등, 선택)
+            </span>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+              placeholder="예: 실적 개선 기대, 장기 보유 목적"
+              className="rounded border border-line-hairline bg-transparent px-3 py-2 text-sm dark:border-line-hairline-dark"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-ink-secondary dark:text-ink-secondary-dark">
+              목표 비중 % (리밸런싱용, 선택)
+            </span>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={targetWeightPercent}
+              onChange={(e) => setTargetWeightPercent(e.target.value)}
+              placeholder="예: 20"
+              className="rounded border border-line-hairline bg-transparent px-3 py-2 tabular-nums dark:border-line-hairline-dark"
+            />
+          </label>
 
           <div className="rounded border border-line-hairline p-3 dark:border-line-hairline-dark">
             <label className="flex items-center gap-2 text-sm">

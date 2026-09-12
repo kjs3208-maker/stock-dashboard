@@ -1,23 +1,28 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Account, Holding, HistoryPoint, NewsItem, Quote, Transaction } from "@/lib/types";
+import { Account, Holding, HistoryPoint, NewsItem, Quote, Transaction, WatchlistItem } from "@/lib/types";
 import {
+  BackupData,
   createDividendId,
   createHoldingId,
   createTransactionId,
+  createWatchlistId,
+  importBackup,
   loadAccounts,
   loadHoldings,
   loadTargetAmount,
+  loadWatchlist,
   loadYearlyReturnOverrides,
   saveAccounts,
   saveHoldings,
   saveTargetAmount,
+  saveWatchlist,
   saveYearlyReturnOverrides,
   YearlyReturnOverrides,
 } from "@/lib/storage";
 import { fetchFxRates, fetchHistory, fetchNews, fetchQuotes } from "@/lib/marketData";
-import { convertToKRW } from "@/lib/fx";
+import { convertFromKRW, convertToKRW } from "@/lib/fx";
 import {
   applyYearlyOverrides,
   computeHoldingMetrics,
@@ -36,6 +41,11 @@ import { AccountManagerModal } from "@/components/AccountManagerModal";
 import { TargetAmountModal } from "@/components/TargetAmountModal";
 import { TransactionsPanel } from "@/components/TransactionsPanel";
 import { DividendsPanel } from "@/components/DividendsPanel";
+import { WatchlistPanel } from "@/components/WatchlistPanel";
+import { DividendCalendar } from "@/components/DividendCalendar";
+import { RebalancePanel } from "@/components/RebalancePanel";
+import { AnalysisModal } from "@/components/AnalysisModal";
+import { BackupControls } from "@/components/BackupControls";
 
 const DISPLAY_CURRENCY = "KRW";
 const ALL_ACCOUNTS = "all";
@@ -60,6 +70,14 @@ export default function DashboardPage() {
   const [targetModalOpen, setTargetModalOpen] = useState(false);
   const [fxRates, setFxRates] = useState<Record<string, number>>({ KRW: 1 });
   const [fxIsMock, setFxIsMock] = useState(false);
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [holdingPrefill, setHoldingPrefill] = useState<
+    { symbol: string; name: string; currency: string } | undefined
+  >(undefined);
+  const convertingWatchlistIdRef = useRef<string | null>(null);
+  const [analysisTarget, setAnalysisTarget] = useState<{ symbol: string; name: string } | null>(
+    null
+  );
 
   // Fetch exchange rates once - used to combine holdings/accounts that
   // aren't all in the same currency into one meaningful total.
@@ -89,6 +107,7 @@ export default function DashboardPage() {
     setAccounts(loadAccounts());
     setTargetAmount(loadTargetAmount());
     setYearlyOverrides(loadYearlyReturnOverrides());
+    setWatchlist(loadWatchlist());
     /* eslint-enable react-hooks/set-state-in-effect */
     setHydrated(true);
   }, []);
@@ -105,6 +124,9 @@ export default function DashboardPage() {
   useEffect(() => {
     if (hydrated) saveYearlyReturnOverrides(yearlyOverrides);
   }, [yearlyOverrides, hydrated]);
+  useEffect(() => {
+    if (hydrated) saveWatchlist(watchlist);
+  }, [watchlist, hydrated]);
 
   // Fall back to the first holding whenever the user's pick is unset or no
   // longer exists - derived directly in render, no effect needed.
@@ -122,8 +144,11 @@ export default function DashboardPage() {
   );
 
   const symbols = useMemo(
-    () => Array.from(new Set(holdings.map((h) => h.symbol))),
-    [holdings]
+    () =>
+      Array.from(
+        new Set([...holdings.map((h) => h.symbol), ...watchlist.map((w) => w.symbol)])
+      ),
+    [holdings, watchlist]
   );
 
   // Fetch current quotes for every held symbol (across all accounts, so
@@ -309,6 +334,34 @@ export default function DashboardPage() {
     [rows, fxRates]
   );
 
+  const rebalanceSuggestions = useMemo(() => {
+    const totalValueInBase = rows.reduce(
+      (sum, r) => sum + convertToKRW(r.marketValue, r.holding.currency, fxRates),
+      0
+    );
+    return rows
+      .filter((r) => r.holding.targetWeightPercent != null)
+      .map((r) => {
+        const valueInBase = convertToKRW(r.marketValue, r.holding.currency, fxRates);
+        const currentWeightPercent =
+          totalValueInBase > 0 ? (valueInBase / totalValueInBase) * 100 : 0;
+        const targetWeightPercent = r.holding.targetWeightPercent as number;
+        const targetValueInBase = (targetWeightPercent / 100) * totalValueInBase;
+        const diffValueInBase = targetValueInBase - valueInBase;
+        const diffValueNative = convertFromKRW(diffValueInBase, r.holding.currency, fxRates);
+        const price = r.quote?.price ?? null;
+        return {
+          symbol: r.holding.symbol,
+          name: r.holding.name,
+          currency: r.holding.currency,
+          currentWeightPercent,
+          targetWeightPercent,
+          diffValueNative,
+          diffQuantity: price && price > 0 ? diffValueNative / price : null,
+        };
+      });
+  }, [rows, fxRates]);
+
   function handleSave(values: HoldingFormValues) {
     setHoldings((prev) => {
       if (values.id) {
@@ -320,6 +373,8 @@ export default function DashboardPage() {
                 currency: values.currency,
                 accountId: values.accountId,
                 manualPrice: values.manualPrice,
+                note: values.note,
+                targetWeightPercent: values.targetWeightPercent,
               }
             : h
         );
@@ -336,13 +391,39 @@ export default function DashboardPage() {
           currency: values.currency,
           accountId: values.accountId,
           manualPrice: values.manualPrice,
+          note: values.note,
+          targetWeightPercent: values.targetWeightPercent,
           transactions,
           dividends: [],
         },
       ];
     });
+    if (!values.id && convertingWatchlistIdRef.current) {
+      const convertedId = convertingWatchlistIdRef.current;
+      setWatchlist((prev) => prev.filter((w) => w.id !== convertedId));
+      convertingWatchlistIdRef.current = null;
+    }
     setModalOpen(false);
     setEditingHolding(null);
+    setHoldingPrefill(undefined);
+  }
+
+  function handleAddWatchlistItem(item: { symbol: string; name: string; currency: string }) {
+    setWatchlist((prev) => [
+      ...prev,
+      { ...item, id: createWatchlistId(), addedDate: new Date().toISOString().slice(0, 10) },
+    ]);
+  }
+
+  function handleDeleteWatchlistItem(id: string) {
+    setWatchlist((prev) => prev.filter((w) => w.id !== id));
+  }
+
+  function handleConvertWatchlistItem(item: WatchlistItem) {
+    convertingWatchlistIdRef.current = item.id;
+    setHoldingPrefill({ symbol: item.symbol, name: item.name, currency: item.currency });
+    setEditingHolding(null);
+    setModalOpen(true);
   }
 
   function handleDelete(holding: Holding) {
@@ -420,6 +501,15 @@ export default function DashboardPage() {
     });
   }
 
+  function handleImportBackup(data: BackupData) {
+    importBackup(data);
+    setHoldings(data.holdings ?? []);
+    setAccounts(data.accounts ?? []);
+    setTargetAmount(data.targetAmount ?? null);
+    setYearlyOverrides(data.yearlyReturnOverrides ?? {});
+    setWatchlist(data.watchlist ?? []);
+  }
+
   const selectedHolding = holdings.find((h) => h.symbol === selectedSymbol) ?? null;
 
   return (
@@ -434,6 +524,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <BackupControls onImported={handleImportBackup} />
           <button
             onClick={() => setTargetModalOpen(true)}
             className="rounded border border-line-hairline px-3 py-2 text-sm dark:border-line-hairline-dark"
@@ -449,6 +540,8 @@ export default function DashboardPage() {
           <button
             onClick={() => {
               setEditingHolding(null);
+              setHoldingPrefill(undefined);
+              convertingWatchlistIdRef.current = null;
               setModalOpen(true);
             }}
             className="rounded bg-series-1 px-4 py-2 text-sm font-medium text-white hover:opacity-90"
@@ -520,6 +613,21 @@ export default function DashboardPage() {
             setModalOpen(true);
           }}
           onDelete={handleDelete}
+          onAnalyze={(h) => setAnalysisTarget({ symbol: h.symbol, name: h.name })}
+        />
+      </section>
+
+      <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
+        <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+          관심종목
+        </h2>
+        <WatchlistPanel
+          items={watchlist}
+          quotes={quotes}
+          onAdd={handleAddWatchlistItem}
+          onDelete={handleDeleteWatchlistItem}
+          onConvert={handleConvertWatchlistItem}
+          onAnalyze={setAnalysisTarget}
         />
       </section>
 
@@ -550,11 +658,27 @@ export default function DashboardPage() {
         </div>
       )}
 
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <section className="rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
+          <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+            자산 배분
+          </h2>
+          <AllocationChart slices={allocationSlices} fxIsMock={fxIsMock} />
+        </section>
+
+        <section className="rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
+          <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+            리밸런싱 제안
+          </h2>
+          <RebalancePanel suggestions={rebalanceSuggestions} />
+        </section>
+      </div>
+
       <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
         <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
-          자산 배분
+          배당 캘린더
         </h2>
-        <AllocationChart slices={allocationSlices} fxIsMock={fxIsMock} />
+        <DividendCalendar holdings={holdings} />
       </section>
 
       {selectedHolding && (
@@ -600,9 +724,12 @@ export default function DashboardPage() {
         open={modalOpen}
         initial={editingHolding}
         accounts={accounts}
+        prefill={holdingPrefill}
         onClose={() => {
           setModalOpen(false);
           setEditingHolding(null);
+          setHoldingPrefill(undefined);
+          convertingWatchlistIdRef.current = null;
         }}
         onSave={handleSave}
       />
@@ -629,6 +756,8 @@ export default function DashboardPage() {
           setTargetModalOpen(false);
         }}
       />
+
+      <AnalysisModal target={analysisTarget} onClose={() => setAnalysisTarget(null)} />
     </main>
   );
 }

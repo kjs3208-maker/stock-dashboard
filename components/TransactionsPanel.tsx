@@ -19,6 +19,7 @@ export function TransactionsPanel({ holding, onAdd, onDelete }: TransactionsPane
   const [date, setDate] = useState(todayIso());
   const [quantity, setQuantity] = useState("");
   const [price, setPrice] = useState("");
+  const [fee, setFee] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const sorted = [...holding.transactions].sort(
@@ -36,10 +37,16 @@ export function TransactionsPanel({ holding, onAdd, onDelete }: TransactionsPane
       setError("가격은 0보다 큰 숫자여야 합니다.");
       return;
     }
+    const feeValue = fee.trim() === "" ? undefined : Number(fee);
+    if (feeValue != null && (!Number.isFinite(feeValue) || feeValue < 0)) {
+      setError("수수료는 0 이상의 숫자여야 합니다.");
+      return;
+    }
     setError(null);
-    onAdd({ type, date, quantity: qty, price: p });
+    onAdd({ type, date, quantity: qty, price: p, fee: feeValue });
     setQuantity("");
     setPrice("");
+    setFee("");
   }
 
   return (
@@ -67,6 +74,9 @@ export function TransactionsPanel({ holding, onAdd, onDelete }: TransactionsPane
               </div>
               <div className="tabular-nums text-ink-primary dark:text-ink-primary-dark">
                 {t.quantity}주 · {formatCurrency(t.price, holding.currency)}
+                {t.fee ? (
+                  <span className="text-ink-muted"> (수수료 {formatCurrency(t.fee, holding.currency)})</span>
+                ) : null}
               </div>
               <button
                 onClick={() => onDelete(t.id)}
@@ -117,6 +127,18 @@ export function TransactionsPanel({ holding, onAdd, onDelete }: TransactionsPane
             inputMode="decimal"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
+            className="w-24 rounded border border-line-hairline bg-transparent px-2 py-1.5 text-sm tabular-nums dark:border-line-hairline-dark"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="text-ink-secondary dark:text-ink-secondary-dark">
+            수수료 (선택)
+          </span>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={fee}
+            onChange={(e) => setFee(e.target.value)}
             className="w-24 rounded border border-line-hairline bg-transparent px-2 py-1.5 text-sm tabular-nums dark:border-line-hairline-dark"
           />
         </label>

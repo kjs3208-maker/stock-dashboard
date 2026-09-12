@@ -1,9 +1,10 @@
-import { Account, Dividend, Holding, Transaction } from "./types";
+import { Account, Dividend, Holding, Transaction, WatchlistItem } from "./types";
 
 const HOLDINGS_KEY = "stock-dashboard.holdings.v1";
 const ACCOUNTS_KEY = "stock-dashboard.accounts.v1";
 const TARGET_AMOUNT_KEY = "stock-dashboard.targetAmount.v1";
 const YEARLY_OVERRIDES_KEY = "stock-dashboard.yearlyReturnOverrides.v1";
+const WATCHLIST_KEY = "stock-dashboard.watchlist.v1";
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";
@@ -30,6 +31,10 @@ export function createAccountId(): string {
 
 export function createDividendId(): string {
   return createId("d");
+}
+
+export function createWatchlistId(): string {
+  return createId("w");
 }
 
 // Pre-transactions holdings stored a single quantity/avgBuyPrice/buyDate.
@@ -191,4 +196,56 @@ export function saveYearlyReturnOverrides(overrides: YearlyReturnOverrides): voi
   } catch {
     // ignore
   }
+}
+
+export function loadWatchlist(): WatchlistItem[] {
+  if (!isBrowser()) return [];
+  try {
+    const raw = window.localStorage.getItem(WATCHLIST_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed as WatchlistItem[];
+  } catch {
+    return [];
+  }
+}
+
+export function saveWatchlist(items: WatchlistItem[]): void {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.setItem(WATCHLIST_KEY, JSON.stringify(items));
+  } catch {
+    // ignore
+  }
+}
+
+export interface BackupData {
+  version: 1;
+  exportedAt: string;
+  holdings: Holding[];
+  accounts: Account[];
+  targetAmount: number | null;
+  yearlyReturnOverrides: YearlyReturnOverrides;
+  watchlist: WatchlistItem[];
+}
+
+export function exportBackup(): BackupData {
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    holdings: loadHoldings(),
+    accounts: loadAccounts(),
+    targetAmount: loadTargetAmount(),
+    yearlyReturnOverrides: loadYearlyReturnOverrides(),
+    watchlist: loadWatchlist(),
+  };
+}
+
+export function importBackup(data: BackupData): void {
+  if (Array.isArray(data.holdings)) saveHoldings(data.holdings);
+  if (Array.isArray(data.accounts)) saveAccounts(data.accounts);
+  saveTargetAmount(data.targetAmount ?? null);
+  if (data.yearlyReturnOverrides) saveYearlyReturnOverrides(data.yearlyReturnOverrides);
+  if (Array.isArray(data.watchlist)) saveWatchlist(data.watchlist);
 }

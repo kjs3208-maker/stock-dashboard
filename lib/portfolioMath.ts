@@ -39,18 +39,21 @@ function walkTransactions(transactions: Transaction[]): HoldingPosition {
   let firstBuyDate: string | null = null;
 
   for (const t of sorted) {
+    const fee = t.fee ?? 0;
     if (t.type === "buy") {
       if (firstBuyDate == null || new Date(t.date) < new Date(firstBuyDate)) {
         firstBuyDate = t.date;
       }
-      totalInvested += t.quantity * t.price;
+      const buyCost = t.quantity * t.price + fee;
+      totalInvested += buyCost;
       const newQuantity = quantity + t.quantity;
-      avgCost = newQuantity > 0 ? (quantity * avgCost + t.quantity * t.price) / newQuantity : 0;
+      avgCost = newQuantity > 0 ? (quantity * avgCost + buyCost) / newQuantity : 0;
       quantity = newQuantity;
     } else {
       const sellQuantity = Math.min(t.quantity, quantity);
-      realizedPnl += (t.price - avgCost) * sellQuantity;
-      totalProceeds += t.price * sellQuantity;
+      const proceeds = t.price * sellQuantity - fee;
+      realizedPnl += proceeds - avgCost * sellQuantity;
+      totalProceeds += proceeds;
       quantity -= sellQuantity;
     }
   }

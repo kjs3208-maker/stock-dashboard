@@ -27,3 +27,10 @@ export function convertToKRW(amount: number, currency: string, rates: Record<str
   const rate = rates[currency] ?? FALLBACK_FX_TO_KRW[currency] ?? 1;
   return amount * rate;
 }
+
+/** Inverse of convertToKRW - turns a KRW amount back into `currency`. */
+export function convertFromKRW(amountInKRW: number, currency: string, rates: Record<string, number>): number {
+  if (currency === BASE_CURRENCY) return amountInKRW;
+  const rate = rates[currency] ?? FALLBACK_FX_TO_KRW[currency] ?? 1;
+  return rate > 0 ? amountInKRW / rate : 0;
+}

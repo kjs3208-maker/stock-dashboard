@@ -50,3 +50,21 @@ export async function fetchFxRates(): Promise<FxRates> {
   if (!res.ok) throw new Error(`fx fetch failed: ${res.status}`);
   return res.json();
 }
+
+export interface AnalysisResult {
+  analysis?: string;
+  error?: string;
+}
+
+export async function fetchAnalysis(symbol: string, name: string): Promise<AnalysisResult> {
+  const res = await fetch("/api/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ symbol, name }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    return { error: data?.error ?? `분석 요청 실패 (${res.status})` };
+  }
+  return data;
+}

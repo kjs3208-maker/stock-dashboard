@@ -20,6 +20,7 @@ interface HoldingsTableProps {
   onSelect: (symbol: string) => void;
   onEdit: (holding: Holding) => void;
   onDelete: (holding: Holding) => void;
+  onAnalyze: (holding: Holding) => void;
 }
 
 function deltaColorClass(value: number): string {
@@ -34,6 +35,7 @@ export function HoldingsTable({
   onSelect,
   onEdit,
   onDelete,
+  onAnalyze,
 }: HoldingsTableProps) {
   if (rows.length === 0) {
     return (
@@ -71,8 +73,12 @@ export function HoldingsTable({
                 }`}
               >
                 <td className="px-4 py-3">
-                  <div className="font-medium text-ink-primary dark:text-ink-primary-dark">
+                  <div
+                    className="font-medium text-ink-primary dark:text-ink-primary-dark"
+                    title={holding.note || undefined}
+                  >
                     {holding.name}
+                    {holding.note && <span className="ml-1 text-ink-muted">📝</span>}
                   </div>
                   <div className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">
                     <span>{holding.symbol}</span>
@@ -120,6 +126,15 @@ export function HoldingsTable({
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAnalyze(holding);
+                      }}
+                      className="rounded px-2 py-1 text-xs text-series-1 hover:bg-series-1/10"
+                    >
+                      AI 분석
+                    </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
