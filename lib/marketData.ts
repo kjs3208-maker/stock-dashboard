@@ -1,5 +1,5 @@
 import { FxRates } from "./fx";
-import { HistoryResult, NewsResult, Quote } from "./types";
+import { HistoryResult, Quote } from "./types";
 
 export async function fetchQuote(symbol: string): Promise<Quote> {
   const res = await fetch(`/api/quote?symbol=${encodeURIComponent(symbol)}`);
@@ -34,14 +34,6 @@ export async function fetchHistory(
     `/api/history?symbol=${encodeURIComponent(symbol)}&years=${years}`
   );
   if (!res.ok) throw new Error(`history fetch failed: ${res.status}`);
-  return res.json();
-}
-
-export async function fetchNews(symbol: string, name: string): Promise<NewsResult> {
-  const res = await fetch(
-    `/api/news?symbol=${encodeURIComponent(symbol)}&name=${encodeURIComponent(name)}`
-  );
-  if (!res.ok) throw new Error(`news fetch failed: ${res.status}`);
   return res.json();
 }
 

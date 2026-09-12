@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Account, Holding, HistoryPoint, NewsItem, Quote, Transaction, WatchlistItem } from "@/lib/types";
+import { Account, Holding, HistoryPoint, Quote, Transaction, WatchlistItem } from "@/lib/types";
 import {
   BackupData,
   createDividendId,
@@ -21,7 +21,7 @@ import {
   saveYearlyReturnOverrides,
   YearlyReturnOverrides,
 } from "@/lib/storage";
-import { fetchFxRates, fetchHistory, fetchNews, fetchQuotes } from "@/lib/marketData";
+import { fetchFxRates, fetchHistory, fetchQuotes } from "@/lib/marketData";
 import { convertFromKRW, convertToKRW } from "@/lib/fx";
 import {
   applyYearlyOverrides,
@@ -37,7 +37,6 @@ import { AllocationChart } from "@/components/AllocationChart";
 import { PriceHistoryChart } from "@/components/PriceHistoryChart";
 import { YearlyReturnChart } from "@/components/YearlyReturnChart";
 import { YearlyReturnOverrideForm } from "@/components/YearlyReturnOverrideForm";
-import { NewsPanel } from "@/components/NewsPanel";
 import { AccountManagerModal } from "@/components/AccountManagerModal";
 import { TargetAmountModal } from "@/components/TargetAmountModal";
 import { TransactionsPanel } from "@/components/TransactionsPanel";
@@ -61,9 +60,6 @@ export default function DashboardPage() {
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [historyBySymbol, setHistoryBySymbol] = useState<Record<string, HistoryPoint[]>>({});
   const [historyMockBySymbol, setHistoryMockBySymbol] = useState<Record<string, boolean>>({});
-  const [newsBySymbol, setNewsBySymbol] = useState<Record<string, NewsItem[]>>({});
-  const [newsMockBySymbol, setNewsMockBySymbol] = useState<Record<string, boolean>>({});
-  const newsFetchingRef = useRef<Set<string>>(new Set());
   const [userSelectedSymbol, setUserSelectedSymbol] = useState<string | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<string>(ALL_ACCOUNTS);
   const [modalOpen, setModalOpen] = useState(false);
@@ -184,20 +180,6 @@ export default function DashboardPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbols]);
-
-  // Fetch news lazily for the currently selected symbol.
-  useEffect(() => {
-    if (!selectedSymbol || selectedSymbol in newsBySymbol) return;
-    if (newsFetchingRef.current.has(selectedSymbol)) return;
-    const holding = holdings.find((h) => h.symbol === selectedSymbol);
-    if (!holding) return;
-    newsFetchingRef.current.add(selectedSymbol);
-    fetchNews(selectedSymbol, holding.name).then((result) => {
-      newsFetchingRef.current.delete(selectedSymbol);
-      setNewsBySymbol((prev) => ({ ...prev, [selectedSymbol]: result.items }));
-      setNewsMockBySymbol((prev) => ({ ...prev, [selectedSymbol]: result.isMock }));
-    });
-  }, [selectedSymbol, holdings, newsBySymbol]);
 
   const rows: HoldingRow[] = useMemo(
     () =>
@@ -718,29 +700,16 @@ export default function DashboardPage() {
       </section>
 
       {selectedHolding && (
-        <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <section className="rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
-            <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
-              {selectedHolding.name} ({selectedHolding.symbol}) 가격 추이
-            </h2>
-            <PriceHistoryChart
-              points={historyBySymbol[selectedHolding.symbol] ?? []}
-              currency={quotes[selectedHolding.symbol]?.currency ?? selectedHolding.currency}
-              isMock={historyMockBySymbol[selectedHolding.symbol] ?? false}
-            />
-          </section>
-
-          <section className="rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
-            <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
-              {selectedHolding.name} 관련 최근 뉴스
-            </h2>
-            <NewsPanel
-              items={newsBySymbol[selectedHolding.symbol] ?? []}
-              isLoading={!(selectedHolding.symbol in newsBySymbol)}
-              isMock={newsMockBySymbol[selectedHolding.symbol] ?? false}
-            />
-          </section>
-        </div>
+        <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
+          <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+            {selectedHolding.name} ({selectedHolding.symbol}) 가격 추이
+          </h2>
+          <PriceHistoryChart
+            points={historyBySymbol[selectedHolding.symbol] ?? []}
+            currency={quotes[selectedHolding.symbol]?.currency ?? selectedHolding.currency}
+            isMock={historyMockBySymbol[selectedHolding.symbol] ?? false}
+          />
+        </section>
       )}
 
       <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">

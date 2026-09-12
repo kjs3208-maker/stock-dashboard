@@ -86,9 +86,3 @@ export interface NewsItem {
   url: string;
   publishedAt: string; // ISO date
 }
-
-export interface NewsResult {
-  symbol: string;
-  items: NewsItem[];
-  isMock: boolean;
-}
