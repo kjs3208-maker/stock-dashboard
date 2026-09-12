@@ -72,6 +72,14 @@ export function HoldingsTable({
                   </div>
                   <div className="flex items-center gap-1 text-xs text-ink-muted">
                     <span>{holding.symbol}</span>
+                    {quote?.isManual && (
+                      <span
+                        title="사용자가 직접 입력한 현재가입니다"
+                        className="rounded bg-series-1/20 px-1 text-series-1"
+                      >
+                        수동입력
+                      </span>
+                    )}
                     {quote?.isMock && (
                       <span
                         title="실시간 데이터 연동 실패 - 모의 데이터 표시 중"

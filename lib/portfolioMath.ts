@@ -1,5 +1,28 @@
 import { Holding, HistoryPoint, Quote } from "./types";
 
+/**
+ * A manually-entered price (for tickers a live provider doesn't cover, e.g.
+ * K-OTC) always wins over any fetched quote. Day-over-day change is unknown
+ * for a manual price, so it's reported as flat (0%) rather than guessed.
+ */
+export function getEffectiveQuote(
+  holding: Holding,
+  quotesBySymbol: Record<string, Quote>
+): Quote | null {
+  if (holding.manualPrice != null) {
+    return {
+      symbol: holding.symbol,
+      price: holding.manualPrice,
+      previousClose: holding.manualPrice,
+      currency: holding.currency,
+      isMock: false,
+      isManual: true,
+      asOf: new Date().toISOString(),
+    };
+  }
+  return quotesBySymbol[holding.symbol] ?? null;
+}
+
 export interface HoldingMetrics {
   marketValue: number;
   costBasis: number;

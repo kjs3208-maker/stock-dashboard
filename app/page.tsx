@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Holding, HistoryPoint, NewsItem, Quote } from "@/lib/types";
 import { createHoldingId, loadHoldings, saveHoldings } from "@/lib/storage";
 import { fetchHistory, fetchNews, fetchQuotes } from "@/lib/marketData";
-import { computeHoldingMetrics, computeYearlyReturns } from "@/lib/portfolioMath";
+import { computeHoldingMetrics, computeYearlyReturns, getEffectiveQuote } from "@/lib/portfolioMath";
 import { SummaryCards } from "@/components/SummaryCards";
 import { HoldingsTable, HoldingRow } from "@/components/HoldingsTable";
 import { HoldingFormModal } from "@/components/HoldingFormModal";
@@ -101,7 +101,7 @@ export default function DashboardPage() {
   const rows: HoldingRow[] = useMemo(
     () =>
       holdings.map((holding) => {
-        const quote = quotes[holding.symbol] ?? null;
+        const quote = getEffectiveQuote(holding, quotes);
         const metrics = computeHoldingMetrics(holding, quote);
         return {
           holding,
@@ -122,7 +122,7 @@ export default function DashboardPage() {
     let worst: { symbol: string; percent: number } | null = null;
 
     for (const holding of holdings) {
-      const quote = quotes[holding.symbol] ?? null;
+      const quote = getEffectiveQuote(holding, quotes);
       const metrics = computeHoldingMetrics(holding, quote);
       totalValue += metrics.marketValue;
       totalCost += metrics.costBasis;

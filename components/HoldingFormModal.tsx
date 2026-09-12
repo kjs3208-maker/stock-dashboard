@@ -31,6 +31,10 @@ export function HoldingFormModal({
   const [avgBuyPrice, setAvgBuyPrice] = useState(initial ? String(initial.avgBuyPrice) : "");
   const [currency, setCurrency] = useState(initial?.currency ?? "KRW");
   const [buyDate, setBuyDate] = useState(initial?.buyDate ?? todayIso());
+  const [useManualPrice, setUseManualPrice] = useState(initial?.manualPrice != null);
+  const [manualPrice, setManualPrice] = useState(
+    initial?.manualPrice != null ? String(initial.manualPrice) : ""
+  );
   const [error, setError] = useState<string | null>(null);
 
   if (!open) return null;
@@ -59,6 +63,15 @@ export function HoldingFormModal({
       return;
     }
 
+    let manualPriceValue: number | undefined;
+    if (useManualPrice) {
+      manualPriceValue = Number(manualPrice);
+      if (!Number.isFinite(manualPriceValue) || manualPriceValue <= 0) {
+        setError("현재가는 0보다 큰 숫자여야 합니다.");
+        return;
+      }
+    }
+
     onSave({
       id: initial?.id,
       symbol: trimmedSymbol,
@@ -67,6 +80,7 @@ export function HoldingFormModal({
       avgBuyPrice: price,
       currency,
       buyDate,
+      manualPrice: manualPriceValue,
     });
   }
 
@@ -159,6 +173,34 @@ export function HoldingFormModal({
                 className="rounded border border-line-hairline bg-transparent px-3 py-2 dark:border-line-hairline-dark"
               />
             </label>
+          </div>
+
+          <div className="rounded border border-line-hairline p-3 dark:border-line-hairline-dark">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={useManualPrice}
+                onChange={(e) => setUseManualPrice(e.target.checked)}
+              />
+              <span className="text-ink-secondary dark:text-ink-secondary-dark">
+                현재가 직접 입력 (K-OTC 등 자동 시세 조회가 안 되는 종목용)
+              </span>
+            </label>
+            {useManualPrice && (
+              <input
+                type="number"
+                inputMode="decimal"
+                value={manualPrice}
+                onChange={(e) => setManualPrice(e.target.value)}
+                placeholder="예: 12500"
+                className="mt-2 w-full rounded border border-line-hairline bg-transparent px-3 py-2 tabular-nums dark:border-line-hairline-dark"
+              />
+            )}
+            {useManualPrice && (
+              <p className="mt-1 text-xs text-ink-muted">
+                이 종목은 실시간 조회 대신 여기 입력한 가격으로 손익이 계산되며, 값이 바뀌면 직접 수정해 주셔야 합니다.
+              </p>
+            )}
           </div>
 
           {error && <div className="text-sm text-status-critical">{error}</div>}

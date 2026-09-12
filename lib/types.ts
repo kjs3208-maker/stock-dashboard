@@ -6,6 +6,7 @@ export interface Holding {
   avgBuyPrice: number;
   currency: string; // e.g. "USD", "KRW"
   buyDate: string; // ISO date, first purchase date
+  manualPrice?: number; // user-entered current price, e.g. for K-OTC stocks Yahoo doesn't cover
 }
 
 export interface Quote {
@@ -14,6 +15,7 @@ export interface Quote {
   previousClose: number;
   currency: string;
   isMock: boolean;
+  isManual?: boolean; // true when derived from Holding.manualPrice rather than a live/mock lookup
   asOf: string;
 }
 
