@@ -1,4 +1,4 @@
-import { Dividend, Holding, HistoryPoint, Quote, Transaction } from "./types";
+import { Dividend, Holding, Quote, Transaction } from "./types";
 import { YearlyReturnOverrides } from "./storage";
 import { convertFromKRW, convertToKRW } from "./fx";
 
@@ -10,15 +10,6 @@ export interface HoldingPosition {
   totalProceeds: number; // gross proceeds of every sell, ever
   firstBuyDate: string | null;
 }
-
-const EMPTY_POSITION: HoldingPosition = {
-  quantity: 0,
-  avgCost: 0,
-  realizedPnl: 0,
-  totalInvested: 0,
-  totalProceeds: 0,
-  firstBuyDate: null,
-};
 
 /**
  * Moving-average-cost walk over a holding's buy/sell transactions - the
@@ -63,11 +54,6 @@ function walkTransactions(transactions: Transaction[]): HoldingPosition {
 
 export function computeHoldingPosition(holding: Holding): HoldingPosition {
   return walkTransactions(holding.transactions);
-}
-
-function computeHoldingPositionAsOf(holding: Holding, cutoff: Date): HoldingPosition {
-  const relevant = holding.transactions.filter((t) => new Date(t.date).getTime() <= cutoff.getTime());
-  return relevant.length > 0 ? walkTransactions(relevant) : EMPTY_POSITION;
 }
 
 export interface DividendTotals {
@@ -199,97 +185,76 @@ export function getEffectiveQuote(
 
 export interface YearlyReturnPoint {
   year: number;
-  returnPercent: number;
+  amount: number; // realized P&L (매도 실현손익) for that year, in the base currency
   isManual?: boolean;
 }
 
+interface RealizedPnlEvent {
+  date: string;
+  amount: number; // in the holding's own currency
+}
+
+/** Same moving-average-cost walk as `walkTransactions`, but also records
+ * each sell's realized gain/loss with its date, so it can be bucketed by
+ * year - `walkTransactions` only exposes the cumulative total. */
+function walkTransactionsRealizedEvents(transactions: Transaction[]): RealizedPnlEvent[] {
+  const sorted = [...transactions].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+
+  let quantity = 0;
+  let avgCost = 0;
+  const events: RealizedPnlEvent[] = [];
+
+  for (const t of sorted) {
+    const fee = t.fee ?? 0;
+    if (t.type === "buy") {
+      const buyCost = t.quantity * t.price + fee;
+      const newQuantity = quantity + t.quantity;
+      avgCost = newQuantity > 0 ? (quantity * avgCost + buyCost) / newQuantity : 0;
+      quantity = newQuantity;
+    } else {
+      const sellQuantity = Math.min(t.quantity, quantity);
+      const proceeds = t.price * sellQuantity - fee;
+      events.push({ date: t.date, amount: proceeds - avgCost * sellQuantity });
+      quantity -= sellQuantity;
+    }
+  }
+
+  return events;
+}
+
 /**
- * Approximate portfolio-level yearly return. Every holding's amounts are
- * converted to KRW via `fxRatesToKRW` before summing, so mixed-currency
- * portfolios combine correctly (pass {} to skip conversion). Mid-year
- * buys/sells are folded into the start/end totals as if held all year (a
- * simplification, not a true time-weighted return) - fine for a personal
- * dashboard, not for precise performance reporting.
+ * Yearly realized P&L (실현손익 기준) - sums each holding's sell-realized
+ * gains/losses by the calendar year the sell happened in, converting every
+ * holding's own-currency amount to KRW via `fxRatesToKRW` first so
+ * mixed-currency portfolios combine correctly (pass {} to skip conversion).
+ * Years with no sells at all are omitted; use `applyYearlyOverrides` to
+ * fill in years whose transactions were never entered individually.
  */
 export function computeYearlyReturns(
   holdings: Holding[],
-  historyBySymbol: Record<string, HistoryPoint[]>,
   fxRatesToKRW: Record<string, number> = {}
 ): YearlyReturnPoint[] {
-  const positions = holdings.map((h) => ({ holding: h, position: computeHoldingPosition(h) }));
-  const withBuys = positions.filter((p) => p.position.firstBuyDate != null);
-  if (withBuys.length === 0) return [];
+  const totalsByYear = new Map<number, number>();
 
-  const currentYear = new Date().getFullYear();
-  const earliestYear = Math.min(
-    ...withBuys.map((p) => new Date(p.position.firstBuyDate as string).getFullYear())
-  );
-
-  function closeOnOrBefore(points: HistoryPoint[], cutoff: Date): number | null {
-    let result: number | null = null;
-    for (const p of points) {
-      if (new Date(p.date).getTime() <= cutoff.getTime()) {
-        result = p.close;
-      } else {
-        break;
-      }
-    }
-    return result;
-  }
-
-  const results: YearlyReturnPoint[] = [];
-
-  for (let year = earliestYear; year <= currentYear; year++) {
-    const prevYearEndCutoff = new Date(year - 1, 11, 31, 23, 59, 59);
-    const yearEndCutoff = new Date(year, 11, 31, 23, 59, 59);
-    const yearStartBoundary = new Date(year, 0, 1);
-
-    let totalStart = 0;
-    let totalEnd = 0;
-
-    for (const { holding } of withBuys) {
-      const points = historyBySymbol[holding.symbol] ?? [];
-      const posStart = computeHoldingPositionAsOf(holding, prevYearEndCutoff);
-      const posEnd = computeHoldingPositionAsOf(holding, yearEndCutoff);
-
-      const startPrice = closeOnOrBefore(points, prevYearEndCutoff) ?? posStart.avgCost;
-      const endPrice = closeOnOrBefore(points, yearEndCutoff) ?? posEnd.avgCost;
-
-      const startValue = posStart.quantity * startPrice;
-      const endValue = posEnd.quantity * endPrice;
-
-      const buysDuringYear = holding.transactions
-        .filter(
-          (t) =>
-            t.type === "buy" &&
-            new Date(t.date).getTime() >= yearStartBoundary.getTime() &&
-            new Date(t.date).getTime() <= yearEndCutoff.getTime()
-        )
-        .reduce((sum, t) => sum + t.quantity * t.price, 0);
-
-      const sellsDuringYear = holding.transactions
-        .filter(
-          (t) =>
-            t.type === "sell" &&
-            new Date(t.date).getTime() >= yearStartBoundary.getTime() &&
-            new Date(t.date).getTime() <= yearEndCutoff.getTime()
-        )
-        .reduce((sum, t) => sum + t.quantity * t.price, 0);
-
-      totalStart += convertToKRW(startValue + buysDuringYear, holding.currency, fxRatesToKRW);
-      totalEnd += convertToKRW(endValue + sellsDuringYear, holding.currency, fxRatesToKRW);
-    }
-
-    if (totalStart > 0) {
-      results.push({ year, returnPercent: ((totalEnd - totalStart) / totalStart) * 100 });
+  for (const holding of holdings) {
+    const events = walkTransactionsRealizedEvents(holding.transactions);
+    for (const event of events) {
+      const year = new Date(event.date).getFullYear();
+      const converted = convertToKRW(event.amount, holding.currency, fxRatesToKRW);
+      totalsByYear.set(year, (totalsByYear.get(year) ?? 0) + converted);
     }
   }
 
-  return results;
+  return Array.from(totalsByYear.entries())
+    .map(([year, amount]) => ({ year, amount }))
+    .sort((a, b) => a.year - b.year);
 }
 
 /** Manual per-year overrides always win; they can also add years the
- * computed series has no data for (e.g. returns from before this app). */
+ * computed series has no data for (e.g. realized gains from before this
+ * app, or years whose individual buy/sell transactions weren't entered). */
 export function applyYearlyOverrides(
   computed: YearlyReturnPoint[],
   overrides: YearlyReturnOverrides
@@ -299,7 +264,7 @@ export function applyYearlyOverrides(
   for (const [yearStr, value] of Object.entries(overrides)) {
     const year = Number(yearStr);
     if (!Number.isFinite(value)) continue;
-    byYear.set(year, { year, returnPercent: value, isManual: true });
+    byYear.set(year, { year, amount: value, isManual: true });
   }
   return Array.from(byYear.values()).sort((a, b) => a.year - b.year);
 }

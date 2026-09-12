@@ -309,8 +309,8 @@ export default function DashboardPage() {
   }, [filteredHoldings, quotes, fxRates]);
 
   const yearlyReturnsComputed = useMemo(
-    () => computeYearlyReturns(filteredHoldings, historyBySymbol, fxRates),
-    [filteredHoldings, historyBySymbol, fxRates]
+    () => computeYearlyReturns(filteredHoldings, fxRates),
+    [filteredHoldings, fxRates]
   );
   const yearlyReturns = useMemo(
     () => applyYearlyOverrides(yearlyReturnsComputed, yearlyOverrides),
@@ -726,10 +726,11 @@ export default function DashboardPage() {
 
       <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
         <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
-          연도별 포트폴리오 수익률
+          연도별 실현손익
         </h2>
-        <YearlyReturnChart data={yearlyReturns} />
+        <YearlyReturnChart data={yearlyReturns} currency={DISPLAY_CURRENCY} />
         <YearlyReturnOverrideForm
+          key={hydrated ? "hydrated" : "loading"}
           years={overrideYearOptions}
           overrides={yearlyOverrides}
           onChange={handleYearlyOverrideChange}

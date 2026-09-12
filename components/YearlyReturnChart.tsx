@@ -12,10 +12,11 @@ import {
   LabelList,
 } from "recharts";
 import { YearlyReturnPoint } from "@/lib/portfolioMath";
-import { formatPercent } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 
 interface YearlyReturnChartProps {
   data: YearlyReturnPoint[];
+  currency: string;
 }
 
 const GOOD = "#0ca30c";
@@ -24,13 +25,15 @@ const CRITICAL = "#d03b3b";
 function CustomTooltip({
   active,
   payload,
+  currency,
 }: {
   active?: boolean;
   payload?: { payload: YearlyReturnPoint }[];
+  currency: string;
 }) {
   if (!active || !payload || payload.length === 0) return null;
   const point = payload[0].payload;
-  const color = point.returnPercent >= 0 ? GOOD : CRITICAL;
+  const color = point.amount >= 0 ? GOOD : CRITICAL;
   return (
     <div className="rounded border border-line-hairline bg-surface px-3 py-2 text-xs shadow-md dark:border-line-hairline-dark dark:bg-surface-dark">
       <div className="flex items-center gap-1.5">
@@ -39,21 +42,23 @@ function CustomTooltip({
           style={{ backgroundColor: color }}
         />
         <span className="tabular-nums font-semibold text-ink-primary dark:text-ink-primary-dark">
-          {formatPercent(point.returnPercent)}
+          {point.amount >= 0 ? "+" : ""}
+          {formatCurrency(point.amount, currency)}
         </span>
       </div>
       <div className="mt-0.5 text-ink-muted">
-        {point.year}년{point.isManual ? " · 직접입력" : ""}
+        {point.year}년 실현손익{point.isManual ? " · 직접입력" : ""}
       </div>
     </div>
   );
 }
 
-export function YearlyReturnChart({ data }: YearlyReturnChartProps) {
+export function YearlyReturnChart({ data, currency }: YearlyReturnChartProps) {
   if (data.length === 0) {
     return (
       <div className="text-sm text-ink-muted">
-        연도별 수익을 계산하려면 가격 히스토리 데이터가 필요합니다.
+        연도별 실현손익을 계산하려면 매도 거래내역이 필요합니다. 아래에서 직접 입력할 수도
+        있습니다.
       </div>
     );
   }
@@ -71,19 +76,22 @@ export function YearlyReturnChart({ data }: YearlyReturnChartProps) {
           tick={{ fontSize: 11, fill: "#898781" }}
           axisLine={false}
           tickLine={false}
-          width={48}
-          tickFormatter={(v: number) => `${v}%`}
+          width={64}
+          tickFormatter={(v: number) => formatCurrency(v, currency)}
         />
         <ReferenceLine y={0} stroke="#c3c2b7" />
-        <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(137,135,129,0.08)" }} />
-        <Bar dataKey="returnPercent" maxBarSize={40} radius={[4, 4, 4, 4]}>
+        <Tooltip
+          content={<CustomTooltip currency={currency} />}
+          cursor={{ fill: "rgba(137,135,129,0.08)" }}
+        />
+        <Bar dataKey="amount" maxBarSize={40} radius={[4, 4, 4, 4]}>
           {data.map((d) => (
-            <Cell key={d.year} fill={d.returnPercent >= 0 ? GOOD : CRITICAL} />
+            <Cell key={d.year} fill={d.amount >= 0 ? GOOD : CRITICAL} />
           ))}
           <LabelList
-            dataKey="returnPercent"
+            dataKey="amount"
             position="top"
-            formatter={(v: unknown) => (typeof v === "number" ? formatPercent(v, 1) : "")}
+            formatter={(v: unknown) => (typeof v === "number" ? formatCurrency(v, currency) : "")}
             style={{ fontSize: 11, fill: "#52514e" }}
           />
         </Bar>

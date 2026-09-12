@@ -34,7 +34,8 @@ export function YearlyReturnOverrideForm({
   return (
     <div className="mt-3 border-t border-line-hairline pt-3 dark:border-line-hairline-dark">
       <p className="mb-2 text-xs text-ink-secondary dark:text-ink-secondary-dark">
-        연도별 수익률 직접 입력 (비워두면 자동 계산값 사용)
+        연도별 실현손익 직접 입력 (금액, 비워두면 거래내역 기반 자동 계산값 사용) - 종목별
+        거래내역을 다 입력하기 어려운 과거 연도의 실현손익 합계를 여기에 넣으세요.
       </p>
       <div className="flex flex-wrap gap-3">
         {years.map((year) => (
@@ -43,12 +44,12 @@ export function YearlyReturnOverrideForm({
             <input
               type="number"
               inputMode="decimal"
-              step="0.1"
+              step="1000"
               value={drafts[year] ?? ""}
               onChange={(e) => setDrafts((prev) => ({ ...prev, [year]: e.target.value }))}
               onBlur={(e) => commit(year, e.target.value)}
-              placeholder="%"
-              className="w-20 rounded border border-line-hairline bg-transparent px-2 py-1 text-right tabular-nums dark:border-line-hairline-dark"
+              placeholder="원"
+              className="w-28 rounded border border-line-hairline bg-transparent px-2 py-1 text-right tabular-nums dark:border-line-hairline-dark"
             />
           </label>
         ))}
