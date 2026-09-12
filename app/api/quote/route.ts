@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchYahooChart } from "@/lib/yahoo";
-import { generateMockQuote } from "@/lib/mockData";
+import { generateMockQuote, inferCurrencyFromSymbol } from "@/lib/mockData";
 import { Quote } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     symbol,
     price: mock.price,
     previousClose: mock.previousClose,
-    currency: "USD",
+    currency: inferCurrencyFromSymbol(symbol),
     isMock: true,
     asOf: new Date().toISOString(),
   };

@@ -6,9 +6,12 @@ import { formatCurrency, formatNumber, formatPercent } from "@/lib/format";
 export interface HoldingRow {
   holding: Holding;
   quote: Quote | null;
+  quantity: number;
+  avgCost: number;
   marketValue: number;
-  pnl: number;
-  pnlPercent: number;
+  unrealizedPnl: number;
+  totalReturnPercent: number;
+  accountName: string | null;
 }
 
 interface HoldingsTableProps {
@@ -42,21 +45,22 @@ export function HoldingsTable({
 
   return (
     <div className="overflow-x-auto rounded-lg border border-line-hairline dark:border-line-hairline-dark">
-      <table className="w-full min-w-[720px] border-collapse text-sm">
+      <table className="w-full min-w-[820px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-line-hairline text-left text-ink-secondary dark:border-line-hairline-dark dark:text-ink-secondary-dark">
             <th className="px-4 py-3 font-medium">종목</th>
             <th className="px-4 py-3 text-right font-medium">수량</th>
-            <th className="px-4 py-3 text-right font-medium">매입가</th>
+            <th className="px-4 py-3 text-right font-medium">평균단가</th>
             <th className="px-4 py-3 text-right font-medium">현재가</th>
             <th className="px-4 py-3 text-right font-medium">평가금액</th>
             <th className="px-4 py-3 text-right font-medium">평가손익</th>
-            <th className="px-4 py-3 text-right font-medium">수익률</th>
+            <th className="px-4 py-3 text-right font-medium">누적수익률</th>
             <th className="px-4 py-3 text-right font-medium">관리</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ holding, quote, marketValue, pnl, pnlPercent }) => {
+          {rows.map((row) => {
+            const { holding, quote, quantity, avgCost, marketValue, unrealizedPnl, totalReturnPercent, accountName } = row;
             const isSelected = holding.symbol === selectedSymbol;
             return (
               <tr
@@ -70,8 +74,13 @@ export function HoldingsTable({
                   <div className="font-medium text-ink-primary dark:text-ink-primary-dark">
                     {holding.name}
                   </div>
-                  <div className="flex items-center gap-1 text-xs text-ink-muted">
+                  <div className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">
                     <span>{holding.symbol}</span>
+                    {accountName && (
+                      <span className="rounded bg-ink-muted/10 px-1 text-ink-secondary dark:text-ink-secondary-dark">
+                        {accountName}
+                      </span>
+                    )}
                     {quote?.isManual && (
                       <span
                         title="사용자가 직접 입력한 현재가입니다"
@@ -91,10 +100,10 @@ export function HoldingsTable({
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">
-                  {formatNumber(holding.quantity, 0)}
+                  {formatNumber(quantity, 0)}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">
-                  {formatCurrency(holding.avgBuyPrice, holding.currency)}
+                  {formatCurrency(avgCost, holding.currency)}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">
                   {quote ? formatCurrency(quote.price, quote.currency) : "-"}
@@ -102,12 +111,12 @@ export function HoldingsTable({
                 <td className="px-4 py-3 text-right tabular-nums">
                   {formatCurrency(marketValue, holding.currency)}
                 </td>
-                <td className={`px-4 py-3 text-right tabular-nums ${deltaColorClass(pnl)}`}>
-                  {pnl >= 0 ? "+" : ""}
-                  {formatCurrency(pnl, holding.currency)}
+                <td className={`px-4 py-3 text-right tabular-nums ${deltaColorClass(unrealizedPnl)}`}>
+                  {unrealizedPnl >= 0 ? "+" : ""}
+                  {formatCurrency(unrealizedPnl, holding.currency)}
                 </td>
-                <td className={`px-4 py-3 text-right tabular-nums ${deltaColorClass(pnlPercent)}`}>
-                  {formatPercent(pnlPercent)}
+                <td className={`px-4 py-3 text-right tabular-nums ${deltaColorClass(totalReturnPercent)}`}>
+                  {formatPercent(totalReturnPercent)}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-2">

@@ -1,12 +1,28 @@
+export interface Account {
+  id: string;
+  name: string; // e.g. "키움증권-일반", "연금저축"
+  currency: string; // currency the cash balance is held in
+  cashBalance: number; // 예수금
+}
+
+export type TransactionType = "buy" | "sell";
+
+export interface Transaction {
+  id: string;
+  type: TransactionType;
+  quantity: number;
+  price: number;
+  date: string; // ISO date
+}
+
 export interface Holding {
   id: string;
   symbol: string; // e.g. "AAPL", "005930.KS"
   name: string;
-  quantity: number;
-  avgBuyPrice: number;
   currency: string; // e.g. "USD", "KRW"
-  buyDate: string; // ISO date, first purchase date
+  accountId?: string;
   manualPrice?: number; // user-entered current price, e.g. for K-OTC stocks Yahoo doesn't cover
+  transactions: Transaction[];
 }
 
 export interface Quote {

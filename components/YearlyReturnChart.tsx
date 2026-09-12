@@ -42,7 +42,9 @@ function CustomTooltip({
           {formatPercent(point.returnPercent)}
         </span>
       </div>
-      <div className="mt-0.5 text-ink-muted">{point.year}년</div>
+      <div className="mt-0.5 text-ink-muted">
+        {point.year}년{point.isManual ? " · 직접입력" : ""}
+      </div>
     </div>
   );
 }

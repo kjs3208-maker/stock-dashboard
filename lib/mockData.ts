@@ -19,12 +19,36 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-/** Deterministic base price in [20, 520) derived from the symbol, so the
- * same ticker always produces a plausible, stable-looking mock price. */
+/** Best-effort currency guess from the ticker suffix convention Yahoo
+ * Finance uses, so a mock quote's currency at least matches what a real
+ * lookup for that market would have returned. */
+export function inferCurrencyFromSymbol(symbol: string): string {
+  const upper = symbol.toUpperCase();
+  if (upper.endsWith(".KS") || upper.endsWith(".KQ")) return "KRW";
+  if (upper.endsWith(".T")) return "JPY";
+  if (upper.endsWith(".L")) return "GBP";
+  if (upper.endsWith(".HK")) return "HKD";
+  if (upper.endsWith(".DE") || upper.endsWith(".PA") || upper.endsWith(".AS")) return "EUR";
+  return "USD";
+}
+
+const CURRENCY_SCALE: Record<string, number> = {
+  KRW: 70000,
+  JPY: 3000,
+  USD: 150,
+  GBP: 80,
+  HKD: 100,
+  EUR: 90,
+};
+
+/** Deterministic base price derived from the symbol, scaled to roughly the
+ * right order of magnitude for its inferred currency, so the same ticker
+ * always produces a plausible, stable-looking mock price. */
 function basePriceFor(symbol: string): number {
   const seed = hashString(symbol.toUpperCase());
   const rng = mulberry32(seed);
-  return 20 + rng() * 500;
+  const scale = CURRENCY_SCALE[inferCurrencyFromSymbol(symbol)] ?? 150;
+  return scale * (0.4 + rng() * 1.2);
 }
 
 export function generateMockHistory(
