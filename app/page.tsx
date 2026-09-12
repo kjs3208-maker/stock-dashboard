@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Account, Holding, HistoryPoint, NewsItem, Quote, Transaction } from "@/lib/types";
 import {
+  createDividendId,
   createHoldingId,
   createTransactionId,
   loadAccounts,
@@ -22,6 +23,7 @@ import {
   computeYearlyReturns,
   getEffectiveQuote,
   totalCashBalance,
+  totalDepositedSum,
 } from "@/lib/portfolioMath";
 import { SummaryCards } from "@/components/SummaryCards";
 import { HoldingsTable, HoldingRow } from "@/components/HoldingsTable";
@@ -34,6 +36,7 @@ import { NewsPanel } from "@/components/NewsPanel";
 import { AccountManagerModal } from "@/components/AccountManagerModal";
 import { TargetAmountModal } from "@/components/TargetAmountModal";
 import { TransactionsPanel } from "@/components/TransactionsPanel";
+import { DividendsPanel } from "@/components/DividendsPanel";
 
 const DISPLAY_CURRENCY = "KRW";
 const ALL_ACCOUNTS = "all";
@@ -175,9 +178,18 @@ export default function DashboardPage() {
     return accounts.find((a) => a.id === selectedAccountId)?.cashBalance ?? 0;
   }, [accounts, selectedAccountId]);
 
+  const depositedTotal = useMemo(() => {
+    if (selectedAccountId === ALL_ACCOUNTS) return totalDepositedSum(accounts);
+    return accounts.find((a) => a.id === selectedAccountId)?.totalDeposited ?? 0;
+  }, [accounts, selectedAccountId]);
+
   const summary = useMemo(() => {
     let totalStockValue = 0;
     let totalInvested = 0;
+    let realizedPnl = 0;
+    let unrealizedPnl = 0;
+    let confirmedDividends = 0;
+    let expectedDividends = 0;
     let totalPnl = 0;
     let dayChange = 0;
     let best: { symbol: string; percent: number } | null = null;
@@ -188,6 +200,10 @@ export default function DashboardPage() {
       const metrics = computeHoldingMetrics(holding, quote);
       totalStockValue += metrics.marketValue;
       totalInvested += metrics.totalInvested;
+      realizedPnl += metrics.realizedPnl;
+      unrealizedPnl += metrics.unrealizedPnl;
+      confirmedDividends += metrics.confirmedDividends;
+      expectedDividends += metrics.expectedDividends;
       totalPnl += metrics.totalPnl;
       dayChange += metrics.dayChange;
       if (quote) {
@@ -209,6 +225,10 @@ export default function DashboardPage() {
     return {
       totalStockValue,
       totalCost,
+      realizedPnl,
+      unrealizedPnl,
+      confirmedDividends,
+      expectedDividends,
       totalPnl,
       totalPnlPercent,
       dayChange,
@@ -283,6 +303,7 @@ export default function DashboardPage() {
           accountId: values.accountId,
           manualPrice: values.manualPrice,
           transactions,
+          dividends: [],
         },
       ];
     });
@@ -310,6 +331,47 @@ export default function DashboardPage() {
       prev.map((h) =>
         h.id === holdingId
           ? { ...h, transactions: h.transactions.filter((t) => t.id !== transactionId) }
+          : h
+      )
+    );
+  }
+
+  function handleAddDividend(holdingId: string, dividend: { date: string; expectedAmount: number }) {
+    setHoldings((prev) =>
+      prev.map((h) =>
+        h.id === holdingId
+          ? {
+              ...h,
+              dividends: [
+                ...h.dividends,
+                { ...dividend, id: createDividendId(), status: "expected" as const },
+              ],
+            }
+          : h
+      )
+    );
+  }
+
+  function handleConfirmDividend(holdingId: string, dividendId: string, confirmedAmount: number) {
+    setHoldings((prev) =>
+      prev.map((h) =>
+        h.id === holdingId
+          ? {
+              ...h,
+              dividends: h.dividends.map((d) =>
+                d.id === dividendId ? { ...d, status: "confirmed" as const, confirmedAmount } : d
+              ),
+            }
+          : h
+      )
+    );
+  }
+
+  function handleDeleteDividend(holdingId: string, dividendId: string) {
+    setHoldings((prev) =>
+      prev.map((h) =>
+        h.id === holdingId
+          ? { ...h, dividends: h.dividends.filter((d) => d.id !== dividendId) }
           : h
       )
     );
@@ -393,6 +455,10 @@ export default function DashboardPage() {
           totalStockValue={summary.totalStockValue}
           totalCash={cashTotal}
           totalCost={summary.totalCost}
+          realizedPnl={summary.realizedPnl}
+          unrealizedPnl={summary.unrealizedPnl}
+          confirmedDividends={summary.confirmedDividends}
+          expectedDividends={summary.expectedDividends}
           totalPnl={summary.totalPnl}
           totalPnlPercent={summary.totalPnlPercent}
           dayChange={summary.dayChange}
@@ -403,6 +469,7 @@ export default function DashboardPage() {
           worstPercent={summary.worstPercent}
           currency={DISPLAY_CURRENCY}
           targetAmount={selectedAccountId === ALL_ACCOUNTS ? targetAmount : null}
+          totalDeposited={depositedTotal}
         />
       </div>
 
@@ -423,16 +490,30 @@ export default function DashboardPage() {
       </section>
 
       {selectedHolding && (
-        <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
-          <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
-            {selectedHolding.name} ({selectedHolding.symbol}) 거래 내역
-          </h2>
-          <TransactionsPanel
-            holding={selectedHolding}
-            onAdd={(t) => handleAddTransaction(selectedHolding.id, t)}
-            onDelete={(txId) => handleDeleteTransaction(selectedHolding.id, txId)}
-          />
-        </section>
+        <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <section className="rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
+            <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+              {selectedHolding.name} ({selectedHolding.symbol}) 거래 내역
+            </h2>
+            <TransactionsPanel
+              holding={selectedHolding}
+              onAdd={(t) => handleAddTransaction(selectedHolding.id, t)}
+              onDelete={(txId) => handleDeleteTransaction(selectedHolding.id, txId)}
+            />
+          </section>
+
+          <section className="rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
+            <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+              {selectedHolding.name} 배당금
+            </h2>
+            <DividendsPanel
+              holding={selectedHolding}
+              onAdd={(d) => handleAddDividend(selectedHolding.id, d)}
+              onConfirm={(id, amount) => handleConfirmDividend(selectedHolding.id, id, amount)}
+              onDelete={(id) => handleDeleteDividend(selectedHolding.id, id)}
+            />
+          </section>
+        </div>
       )}
 
       <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">

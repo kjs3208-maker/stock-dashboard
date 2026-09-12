@@ -2,7 +2,8 @@ export interface Account {
   id: string;
   name: string; // e.g. "키움증권-일반", "연금저축"
   currency: string; // currency the cash balance is held in
-  cashBalance: number; // 예수금
+  cashBalance: number; // 예수금 - cash currently sitting in the account
+  totalDeposited: number; // 계좌투입금 - cumulative capital ever put into the account
 }
 
 export type TransactionType = "buy" | "sell";
@@ -15,6 +16,16 @@ export interface Transaction {
   date: string; // ISO date
 }
 
+export type DividendStatus = "expected" | "confirmed";
+
+export interface Dividend {
+  id: string;
+  date: string; // ISO date - expected or actual pay date
+  expectedAmount: number;
+  status: DividendStatus;
+  confirmedAmount?: number; // may differ from expectedAmount once confirmed
+}
+
 export interface Holding {
   id: string;
   symbol: string; // e.g. "AAPL", "005930.KS"
@@ -23,6 +34,7 @@ export interface Holding {
   accountId?: string;
   manualPrice?: number; // user-entered current price, e.g. for K-OTC stocks Yahoo doesn't cover
   transactions: Transaction[];
+  dividends: Dividend[];
 }
 
 export interface Quote {

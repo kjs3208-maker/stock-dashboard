@@ -1,4 +1,4 @@
-import { Account, Holding, HistoryPoint, Quote, Transaction } from "./types";
+import { Account, Dividend, Holding, HistoryPoint, Quote, Transaction } from "./types";
 import { YearlyReturnOverrides } from "./storage";
 
 export interface HoldingPosition {
@@ -66,15 +66,35 @@ function computeHoldingPositionAsOf(holding: Holding, cutoff: Date): HoldingPosi
   return relevant.length > 0 ? walkTransactions(relevant) : EMPTY_POSITION;
 }
 
+export interface DividendTotals {
+  confirmedTotal: number;
+  expectedTotal: number; // pending, not yet confirmed
+}
+
+export function computeDividendTotals(dividends: Dividend[]): DividendTotals {
+  let confirmedTotal = 0;
+  let expectedTotal = 0;
+  for (const d of dividends) {
+    if (d.status === "confirmed") {
+      confirmedTotal += d.confirmedAmount ?? d.expectedAmount;
+    } else {
+      expectedTotal += d.expectedAmount;
+    }
+  }
+  return { confirmedTotal, expectedTotal };
+}
+
 export interface HoldingMetrics {
   quantity: number;
   avgCost: number;
   marketValue: number;
   costBasis: number; // remaining shares' cost, at current average cost
   unrealizedPnl: number;
-  realizedPnl: number;
+  realizedPnl: number; // trading gains/losses from sells only, excludes dividends
+  confirmedDividends: number;
+  expectedDividends: number;
   totalInvested: number;
-  totalPnl: number; // realized + unrealized
+  totalPnl: number; // realized + unrealized + confirmed dividends
   totalReturnPercent: number; // cumulative return since the first ever buy
   dayChange: number;
   dayChangePercent: number;
@@ -83,8 +103,11 @@ export interface HoldingMetrics {
 export function computeHoldingMetrics(holding: Holding, quote: Quote | null): HoldingMetrics {
   const position = computeHoldingPosition(holding);
   const costBasis = position.quantity * position.avgCost;
+  const { confirmedTotal: confirmedDividends, expectedTotal: expectedDividends } =
+    computeDividendTotals(holding.dividends);
 
   if (!quote) {
+    const totalPnl = position.realizedPnl + confirmedDividends;
     return {
       quantity: position.quantity,
       avgCost: position.avgCost,
@@ -92,10 +115,12 @@ export function computeHoldingMetrics(holding: Holding, quote: Quote | null): Ho
       costBasis,
       unrealizedPnl: 0,
       realizedPnl: position.realizedPnl,
+      confirmedDividends,
+      expectedDividends,
       totalInvested: position.totalInvested,
-      totalPnl: position.realizedPnl,
+      totalPnl,
       totalReturnPercent:
-        position.totalInvested > 0 ? (position.realizedPnl / position.totalInvested) * 100 : 0,
+        position.totalInvested > 0 ? (totalPnl / position.totalInvested) * 100 : 0,
       dayChange: 0,
       dayChangePercent: 0,
     };
@@ -103,7 +128,7 @@ export function computeHoldingMetrics(holding: Holding, quote: Quote | null): Ho
 
   const marketValue = position.quantity * quote.price;
   const unrealizedPnl = marketValue - costBasis;
-  const totalPnl = unrealizedPnl + position.realizedPnl;
+  const totalPnl = unrealizedPnl + position.realizedPnl + confirmedDividends;
   const totalReturnPercent =
     position.totalInvested > 0 ? (totalPnl / position.totalInvested) * 100 : 0;
   const dayChange = position.quantity * (quote.price - quote.previousClose);
@@ -119,6 +144,8 @@ export function computeHoldingMetrics(holding: Holding, quote: Quote | null): Ho
     costBasis,
     unrealizedPnl,
     realizedPnl: position.realizedPnl,
+    confirmedDividends,
+    expectedDividends,
     totalInvested: position.totalInvested,
     totalPnl,
     totalReturnPercent,
@@ -257,4 +284,8 @@ export function applyYearlyOverrides(
 
 export function totalCashBalance(accounts: Account[]): number {
   return accounts.reduce((sum, a) => sum + a.cashBalance, 0);
+}
+
+export function totalDepositedSum(accounts: Account[]): number {
+  return accounts.reduce((sum, a) => sum + a.totalDeposited, 0);
 }

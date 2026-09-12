@@ -32,7 +32,7 @@ export function AccountManagerModal({
   function addRow() {
     setDraft((prev) => [
       ...prev,
-      { id: createAccountId(), name: "", currency: "KRW", cashBalance: 0 },
+      { id: createAccountId(), name: "", currency: "KRW", cashBalance: 0, totalDeposited: 0 },
     ]);
   }
 
@@ -64,43 +64,62 @@ export function AccountManagerModal({
         </div>
 
         <p className="mb-3 text-xs text-ink-muted">
-          계좌별로 종목을 구분하고, 예수금(현금)을 총자산에 포함할 수 있습니다.
+          예수금은 지금 계좌에 남아있는 현금, 계좌투입금은 지금까지 이 계좌에 넣은 총 금액입니다.
+          둘은 따로 관리되며, 총자산·투입금 대비 달성률 계산에 각각 쓰입니다.
         </p>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           {draft.map((a) => (
-            <div key={a.id} className="flex items-center gap-2">
-              <input
-                value={a.name}
-                onChange={(e) => updateRow(a.id, { name: e.target.value })}
-                placeholder="계좌 이름 (예: 키움-일반)"
-                className="min-w-0 flex-1 rounded border border-line-hairline bg-transparent px-2 py-1.5 text-sm dark:border-line-hairline-dark"
-              />
-              <select
-                value={a.currency}
-                onChange={(e) => updateRow(a.id, { currency: e.target.value })}
-                className="rounded border border-line-hairline bg-transparent px-2 py-1.5 text-sm dark:border-line-hairline-dark"
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="number"
-                inputMode="decimal"
-                value={a.cashBalance}
-                onChange={(e) => updateRow(a.id, { cashBalance: Number(e.target.value) })}
-                placeholder="예수금"
-                className="w-28 rounded border border-line-hairline bg-transparent px-2 py-1.5 text-right text-sm tabular-nums dark:border-line-hairline-dark"
-              />
-              <button
-                onClick={() => removeRow(a.id)}
-                className="rounded px-2 py-1.5 text-xs text-status-critical hover:bg-status-critical/10"
-              >
-                삭제
-              </button>
+            <div key={a.id} className="rounded border border-line-hairline p-2 dark:border-line-hairline-dark">
+              <div className="flex items-center gap-2">
+                <input
+                  value={a.name}
+                  onChange={(e) => updateRow(a.id, { name: e.target.value })}
+                  placeholder="계좌 이름 (예: 키움-일반)"
+                  className="min-w-0 flex-1 rounded border border-line-hairline bg-transparent px-2 py-1.5 text-sm dark:border-line-hairline-dark"
+                />
+                <select
+                  value={a.currency}
+                  onChange={(e) => updateRow(a.id, { currency: e.target.value })}
+                  className="rounded border border-line-hairline bg-transparent px-2 py-1.5 text-sm dark:border-line-hairline-dark"
+                >
+                  {CURRENCIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => removeRow(a.id)}
+                  className="rounded px-2 py-1.5 text-xs text-status-critical hover:bg-status-critical/10"
+                >
+                  삭제
+                </button>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1 text-xs">
+                  <span className="text-ink-secondary dark:text-ink-secondary-dark">예수금</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={a.cashBalance}
+                    onChange={(e) => updateRow(a.id, { cashBalance: Number(e.target.value) })}
+                    className="rounded border border-line-hairline bg-transparent px-2 py-1.5 text-right text-sm tabular-nums dark:border-line-hairline-dark"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs">
+                  <span className="text-ink-secondary dark:text-ink-secondary-dark">
+                    계좌투입금 (누적)
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={a.totalDeposited}
+                    onChange={(e) => updateRow(a.id, { totalDeposited: Number(e.target.value) })}
+                    className="rounded border border-line-hairline bg-transparent px-2 py-1.5 text-right text-sm tabular-nums dark:border-line-hairline-dark"
+                  />
+                </label>
+              </div>
             </div>
           ))}
           {draft.length === 0 && (

@@ -1,4 +1,4 @@
-import { Account, Holding, Transaction } from "./types";
+import { Account, Dividend, Holding, Transaction } from "./types";
 
 const HOLDINGS_KEY = "stock-dashboard.holdings.v1";
 const ACCOUNTS_KEY = "stock-dashboard.accounts.v1";
@@ -28,6 +28,10 @@ export function createAccountId(): string {
   return createId("a");
 }
 
+export function createDividendId(): string {
+  return createId("d");
+}
+
 // Pre-transactions holdings stored a single quantity/avgBuyPrice/buyDate.
 // Anything already read from storage without a `transactions` array is that
 // older shape - fold it into one synthetic "buy" transaction so existing
@@ -43,9 +47,12 @@ interface LegacyHolding {
   manualPrice?: number;
   accountId?: string;
   transactions?: Transaction[];
+  dividends?: Dividend[];
 }
 
 function migrateHolding(raw: LegacyHolding): Holding {
+  const dividends = Array.isArray(raw.dividends) ? raw.dividends : [];
+
   if (Array.isArray(raw.transactions)) {
     return {
       id: raw.id,
@@ -55,6 +62,7 @@ function migrateHolding(raw: LegacyHolding): Holding {
       accountId: raw.accountId,
       manualPrice: raw.manualPrice,
       transactions: raw.transactions,
+      dividends,
     };
   }
   const transactions: Transaction[] =
@@ -77,6 +85,7 @@ function migrateHolding(raw: LegacyHolding): Holding {
     accountId: raw.accountId,
     manualPrice: raw.manualPrice,
     transactions,
+    dividends,
   };
 }
 
@@ -102,6 +111,14 @@ export function saveHoldings(holdings: Holding[]): void {
   }
 }
 
+interface LegacyAccount {
+  id: string;
+  name: string;
+  currency: string;
+  cashBalance: number;
+  totalDeposited?: number;
+}
+
 export function loadAccounts(): Account[] {
   if (!isBrowser()) return [];
   try {
@@ -109,7 +126,10 @@ export function loadAccounts(): Account[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed as Account[];
+    return (parsed as LegacyAccount[]).map((a) => ({
+      ...a,
+      totalDeposited: a.totalDeposited ?? 0,
+    }));
   } catch {
     return [];
   }
