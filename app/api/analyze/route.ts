@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { fetchYahooChart, fetchYahooNews } from "@/lib/yahoo";
 import { generateMockHistory, generateMockNews, generateMockQuote, inferCurrencyFromSymbol } from "@/lib/mockData";
-import { analyzeSentiment } from "@/lib/sentiment";
 
 export const dynamic = "force-dynamic";
 
@@ -49,9 +48,7 @@ export async function POST(req: NextRequest) {
     publishedAt: n.publishedAt,
   }))).slice(0, 6);
 
-  const newsSummary = news
-    .map((n) => `- (${analyzeSentiment(n.title)}) ${n.title}`)
-    .join("\n");
+  const newsSummary = news.map((n) => `- ${n.title}`).join("\n");
 
   const userPrompt = `다음 종목에 대해 한국어로 간단한 투자 참고 분석을 작성해 주세요.
 

@@ -268,3 +268,49 @@ export function applyYearlyOverrides(
   }
   return Array.from(byYear.values()).sort((a, b) => a.year - b.year);
 }
+
+const FOREIGN_CAPITAL_GAINS_EXEMPTION_KRW = 2_500_000; // 해외주식 양도소득 연간 기본공제
+const FOREIGN_CAPITAL_GAINS_TAX_RATE = 0.22; // 양도소득세 20% + 지방소득세 2%
+
+export interface ForeignCapitalGainsTaxEstimate {
+  year: number;
+  realizedGain: number; // that year's realized gain on non-KRW holdings, from transactions only
+  exemption: number;
+  taxableAmount: number;
+  estimatedTax: number;
+}
+
+/**
+ * Rough estimate of Korean 해외주식(외화표시 주식) 양도소득세 for one year:
+ * (해외주식 실현손익 - 연 250만원 기본공제) x 22%, floored at 0. Only
+ * counts realized gains from holdings whose currency isn't KRW (KRW-listed
+ * stocks are ordinarily exempt for retail investors) and only from actual
+ * transaction history - lump-sum manual realized-P&L overrides aren't
+ * currency-tagged, so they're excluded here. Not tax advice: doesn't model
+ * 대주주 status, loss carryforward/통산 across years, or withholding.
+ */
+export function estimateForeignCapitalGainsTax(
+  holdings: Holding[],
+  year: number,
+  fxRatesToKRW: Record<string, number> = {}
+): ForeignCapitalGainsTaxEstimate {
+  let realizedGain = 0;
+  for (const holding of holdings) {
+    if (holding.currency === "KRW") continue;
+    const events = walkTransactionsRealizedEvents(holding.transactions);
+    for (const event of events) {
+      if (new Date(event.date).getFullYear() === year) {
+        realizedGain += convertToKRW(event.amount, holding.currency, fxRatesToKRW);
+      }
+    }
+  }
+  const taxableAmount = Math.max(0, realizedGain - FOREIGN_CAPITAL_GAINS_EXEMPTION_KRW);
+  const estimatedTax = taxableAmount * FOREIGN_CAPITAL_GAINS_TAX_RATE;
+  return {
+    year,
+    realizedGain,
+    exemption: FOREIGN_CAPITAL_GAINS_EXEMPTION_KRW,
+    taxableAmount,
+    estimatedTax,
+  };
+}

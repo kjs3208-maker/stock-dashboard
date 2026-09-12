@@ -1,4 +1,4 @@
-import { HistoryPoint, NewsItem, Sentiment } from "./types";
+import { HistoryPoint, NewsItem } from "./types";
 
 function hashString(input: string): number {
   let h = 0;
@@ -98,17 +98,17 @@ export function generateMockQuote(symbol: string): {
   return { price: last.close, previousClose: prev.close };
 }
 
-const HEADLINE_TEMPLATES: { text: string; sentiment: Sentiment }[] = [
-  { text: "{name}, 시장 예상치 상회하는 분기 실적 발표", sentiment: "positive" },
-  { text: "{name}, 신규 제품 라인업 공개... 투자자 기대감 확대", sentiment: "positive" },
-  { text: "애널리스트, {name} 목표 주가 상향 조정", sentiment: "positive" },
-  { text: "{name}, 업계 파트너십 체결로 사업 확장", sentiment: "positive" },
-  { text: "{name} 주가, 거시경제 우려 속 보합권 마감", sentiment: "neutral" },
-  { text: "{name}, 신제품 출시 일정 공개", sentiment: "neutral" },
-  { text: "{name} 관련 업계 컨퍼런스 개최 예정", sentiment: "neutral" },
-  { text: "{name}, 공급망 이슈로 단기 실적 우려 제기", sentiment: "negative" },
-  { text: "규제 리스크 부각... {name} 주가 압박", sentiment: "negative" },
-  { text: "애널리스트, {name} 목표 주가 하향 조정", sentiment: "negative" },
+const HEADLINE_TEMPLATES: string[] = [
+  "{name}, 시장 예상치 상회하는 분기 실적 발표",
+  "{name}, 신규 제품 라인업 공개... 투자자 기대감 확대",
+  "애널리스트, {name} 목표 주가 상향 조정",
+  "{name}, 업계 파트너십 체결로 사업 확장",
+  "{name} 주가, 거시경제 우려 속 보합권 마감",
+  "{name}, 신제품 출시 일정 공개",
+  "{name} 관련 업계 컨퍼런스 개최 예정",
+  "{name}, 공급망 이슈로 단기 실적 우려 제기",
+  "규제 리스크 부각... {name} 주가 압박",
+  "애널리스트, {name} 목표 주가 하향 조정",
 ];
 
 const SOURCES = ["연합인포맥스", "한국경제", "매일경제", "Bloomberg", "Reuters", "이데일리"];
@@ -137,11 +137,10 @@ export function generateMockNews(symbol: string, name: string): NewsItem[] {
     items.push({
       id: `${symbol}-mock-${i}`,
       symbol,
-      title: template.text.replace("{name}", name || symbol),
+      title: template.replace("{name}", name || symbol),
       source,
       url: "#",
       publishedAt: publishedAt.toISOString(),
-      sentiment: template.sentiment,
     });
   }
 

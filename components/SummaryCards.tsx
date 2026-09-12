@@ -10,6 +10,7 @@ interface SummaryCardsProps {
   manualRealizedPnl: number; // portion of realizedPnl entered as an account-level lump sum
   unrealizedPnl: number;
   confirmedDividends: number;
+  manualConfirmedDividends: number; // portion of confirmedDividends entered as a lump sum
   expectedDividends: number;
   totalPnl: number; // realized + unrealized + confirmed dividends
   totalPnlPercent: number;
@@ -93,6 +94,7 @@ export function SummaryCards({
   manualRealizedPnl,
   unrealizedPnl,
   confirmedDividends,
+  manualConfirmedDividends,
   expectedDividends,
   totalPnl,
   totalPnlPercent,
@@ -181,9 +183,16 @@ export function SummaryCards({
           label="누적 배당금 (확정)"
           value={formatCurrency(confirmedDividends, currency)}
           sub={
-            expectedDividends > 0
-              ? `예상(미확정) ${formatCurrency(expectedDividends, currency)}`
-              : undefined
+            [
+              manualConfirmedDividends !== 0
+                ? `일괄 입력분 ${formatCurrency(manualConfirmedDividends, currency)} 포함`
+                : null,
+              expectedDividends > 0
+                ? `예상(미확정) ${formatCurrency(expectedDividends, currency)}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ") || undefined
           }
         />
         <Tile

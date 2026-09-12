@@ -143,6 +143,7 @@ interface LegacyAccount {
   cashBalance: number;
   totalDeposited?: number;
   manualRealizedPnl?: number;
+  manualConfirmedDividends?: number;
 }
 
 export function loadAccounts(): Account[] {
@@ -156,6 +157,7 @@ export function loadAccounts(): Account[] {
       ...a,
       totalDeposited: a.totalDeposited ?? 0,
       manualRealizedPnl: a.manualRealizedPnl ?? 0,
+      manualConfirmedDividends: a.manualConfirmedDividends ?? 0,
     }));
   } catch {
     return [];

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchYahooNews } from "@/lib/yahoo";
 import { generateMockNews } from "@/lib/mockData";
-import { analyzeSentiment } from "@/lib/sentiment";
 import { NewsItem, NewsResult } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -22,8 +21,8 @@ export async function GET(req: NextRequest) {
       source: n.source,
       url: n.url,
       publishedAt: n.publishedAt,
-      sentiment: analyzeSentiment(n.title),
     }));
+    items.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     const result: NewsResult = { symbol, items, isMock: false };
     return NextResponse.json(result);
   }

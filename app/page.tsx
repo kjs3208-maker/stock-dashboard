@@ -27,6 +27,7 @@ import {
   applyYearlyOverrides,
   computeHoldingMetrics,
   computeYearlyReturns,
+  estimateForeignCapitalGainsTax,
   getEffectiveQuote,
 } from "@/lib/portfolioMath";
 import { SummaryCards } from "@/components/SummaryCards";
@@ -46,6 +47,7 @@ import { DividendCalendar } from "@/components/DividendCalendar";
 import { RebalancePanel } from "@/components/RebalancePanel";
 import { AnalysisModal } from "@/components/AnalysisModal";
 import { BackupControls } from "@/components/BackupControls";
+import { TaxEstimatePanel } from "@/components/TaxEstimatePanel";
 
 const DISPLAY_CURRENCY = "KRW";
 const ALL_ACCOUNTS = "all";
@@ -249,6 +251,15 @@ export default function DashboardPage() {
     [relevantAccounts, fxRates]
   );
 
+  const manualConfirmedDividendsTotal = useMemo(
+    () =>
+      relevantAccounts.reduce(
+        (sum, a) => sum + convertToKRW(a.manualConfirmedDividends ?? 0, a.currency, fxRates),
+        0
+      ),
+    [relevantAccounts, fxRates]
+  );
+
   const summary = useMemo(() => {
     let totalStockValue = 0;
     let totalInvested = 0;
@@ -328,6 +339,11 @@ export default function DashboardPage() {
       .filter((y) => y <= currentYear)
       .sort((a, b) => a - b);
   }, [yearlyReturnsComputed, yearlyOverrides]);
+
+  const foreignTaxEstimate = useMemo(
+    () => estimateForeignCapitalGainsTax(filteredHoldings, new Date().getFullYear(), fxRates),
+    [filteredHoldings, fxRates]
+  );
 
   const allocationSlices = useMemo(
     () =>
@@ -597,12 +613,15 @@ export default function DashboardPage() {
           realizedPnl={summary.realizedPnl + manualRealizedPnlTotal}
           manualRealizedPnl={manualRealizedPnlTotal}
           unrealizedPnl={summary.unrealizedPnl}
-          confirmedDividends={summary.confirmedDividends}
+          confirmedDividends={summary.confirmedDividends + manualConfirmedDividendsTotal}
+          manualConfirmedDividends={manualConfirmedDividendsTotal}
           expectedDividends={summary.expectedDividends}
-          totalPnl={summary.totalPnl + manualRealizedPnlTotal}
+          totalPnl={summary.totalPnl + manualRealizedPnlTotal + manualConfirmedDividendsTotal}
           totalPnlPercent={
             summary.totalCost > 0
-              ? ((summary.totalPnl + manualRealizedPnlTotal) / summary.totalCost) * 100
+              ? ((summary.totalPnl + manualRealizedPnlTotal + manualConfirmedDividendsTotal) /
+                  summary.totalCost) *
+                100
               : 0
           }
           dayChange={summary.dayChange}
@@ -735,6 +754,13 @@ export default function DashboardPage() {
           overrides={yearlyOverrides}
           onChange={handleYearlyOverrideChange}
         />
+      </section>
+
+      <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
+        <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+          해외주식 양도소득세 추정 (참고용)
+        </h2>
+        <TaxEstimatePanel estimate={foreignTaxEstimate} currency={DISPLAY_CURRENCY} />
       </section>
 
       <HoldingFormModal

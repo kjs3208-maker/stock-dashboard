@@ -7,6 +7,9 @@ export interface Account {
   manualRealizedPnl?: number; // 실현손익 일괄 입력 - a lump sum for gains/losses already
   // realized on trades whose individual buy/sell transactions were never
   // entered per holding; added on top of any per-holding realized P&L
+  manualConfirmedDividends?: number; // 배당금 일괄 입력 - a lump sum for dividends already
+  // received but never entered per holding/date; added on top of any
+  // per-holding confirmed dividend total
 }
 
 export type TransactionType = "buy" | "sell";
@@ -75,8 +78,6 @@ export interface HistoryResult {
   isMock: boolean;
 }
 
-export type Sentiment = "positive" | "neutral" | "negative";
-
 export interface NewsItem {
   id: string;
   symbol: string;
@@ -84,7 +85,6 @@ export interface NewsItem {
   source: string;
   url: string;
   publishedAt: string; // ISO date
-  sentiment: Sentiment;
 }
 
 export interface NewsResult {
