@@ -16,14 +16,13 @@ import {
   saveYearlyReturnOverrides,
   YearlyReturnOverrides,
 } from "@/lib/storage";
-import { fetchHistory, fetchNews, fetchQuotes } from "@/lib/marketData";
+import { fetchFxRates, fetchHistory, fetchNews, fetchQuotes } from "@/lib/marketData";
+import { convertToKRW } from "@/lib/fx";
 import {
   applyYearlyOverrides,
   computeHoldingMetrics,
   computeYearlyReturns,
   getEffectiveQuote,
-  totalCashBalance,
-  totalDepositedSum,
 } from "@/lib/portfolioMath";
 import { SummaryCards } from "@/components/SummaryCards";
 import { HoldingsTable, HoldingRow } from "@/components/HoldingsTable";
@@ -59,6 +58,26 @@ export default function DashboardPage() {
   const [editingHolding, setEditingHolding] = useState<Holding | null>(null);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [targetModalOpen, setTargetModalOpen] = useState(false);
+  const [fxRates, setFxRates] = useState<Record<string, number>>({ KRW: 1 });
+  const [fxIsMock, setFxIsMock] = useState(false);
+
+  // Fetch exchange rates once - used to combine holdings/accounts that
+  // aren't all in the same currency into one meaningful total.
+  useEffect(() => {
+    let cancelled = false;
+    fetchFxRates()
+      .then((result) => {
+        if (cancelled) return;
+        setFxRates(result.ratesToKRW);
+        setFxIsMock(result.isMock);
+      })
+      .catch(() => {
+        if (!cancelled) setFxIsMock(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load persisted state once on mount (client-only: localStorage isn't
   // available during SSR, so the first render is intentionally empty). This
@@ -173,15 +192,28 @@ export default function DashboardPage() {
     [filteredHoldings, quotes, accounts]
   );
 
-  const cashTotal = useMemo(() => {
-    if (selectedAccountId === ALL_ACCOUNTS) return totalCashBalance(accounts);
-    return accounts.find((a) => a.id === selectedAccountId)?.cashBalance ?? 0;
-  }, [accounts, selectedAccountId]);
+  const relevantAccounts = useMemo(
+    () =>
+      selectedAccountId === ALL_ACCOUNTS
+        ? accounts
+        : accounts.filter((a) => a.id === selectedAccountId),
+    [accounts, selectedAccountId]
+  );
 
-  const depositedTotal = useMemo(() => {
-    if (selectedAccountId === ALL_ACCOUNTS) return totalDepositedSum(accounts);
-    return accounts.find((a) => a.id === selectedAccountId)?.totalDeposited ?? 0;
-  }, [accounts, selectedAccountId]);
+  const cashTotal = useMemo(
+    () =>
+      relevantAccounts.reduce((sum, a) => sum + convertToKRW(a.cashBalance, a.currency, fxRates), 0),
+    [relevantAccounts, fxRates]
+  );
+
+  const depositedTotal = useMemo(
+    () =>
+      relevantAccounts.reduce(
+        (sum, a) => sum + convertToKRW(a.totalDeposited, a.currency, fxRates),
+        0
+      ),
+    [relevantAccounts, fxRates]
+  );
 
   const summary = useMemo(() => {
     let totalStockValue = 0;
@@ -198,14 +230,17 @@ export default function DashboardPage() {
     for (const holding of filteredHoldings) {
       const quote = getEffectiveQuote(holding, quotes);
       const metrics = computeHoldingMetrics(holding, quote);
-      totalStockValue += metrics.marketValue;
-      totalInvested += metrics.totalInvested;
-      realizedPnl += metrics.realizedPnl;
-      unrealizedPnl += metrics.unrealizedPnl;
-      confirmedDividends += metrics.confirmedDividends;
-      expectedDividends += metrics.expectedDividends;
-      totalPnl += metrics.totalPnl;
-      dayChange += metrics.dayChange;
+      const toKRW = (amount: number) => convertToKRW(amount, holding.currency, fxRates);
+      totalStockValue += toKRW(metrics.marketValue);
+      totalInvested += toKRW(metrics.totalInvested);
+      realizedPnl += toKRW(metrics.realizedPnl);
+      unrealizedPnl += toKRW(metrics.unrealizedPnl);
+      confirmedDividends += toKRW(metrics.confirmedDividends);
+      expectedDividends += toKRW(metrics.expectedDividends);
+      totalPnl += toKRW(metrics.totalPnl);
+      dayChange += toKRW(metrics.dayChange);
+      // Per-holding return % is a same-currency ratio, so it needs no FX
+      // conversion - only the portfolio-wide totals above do.
       if (quote) {
         if (!best || metrics.totalReturnPercent > best.percent) {
           best = { symbol: holding.symbol, percent: metrics.totalReturnPercent };
@@ -220,7 +255,6 @@ export default function DashboardPage() {
     const totalPnlPercent = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
     const prevTotalValue = totalStockValue - dayChange;
     const dayChangePercent = prevTotalValue > 0 ? (dayChange / prevTotalValue) * 100 : 0;
-    const currencies = new Set(filteredHoldings.map((h) => h.currency));
 
     return {
       totalStockValue,
@@ -237,13 +271,12 @@ export default function DashboardPage() {
       bestPercent: best ? (best as { percent: number }).percent : 0,
       worstSymbol: worst ? (worst as { symbol: string }).symbol : null,
       worstPercent: worst ? (worst as { percent: number }).percent : 0,
-      mixedCurrency: currencies.size > 1,
     };
-  }, [filteredHoldings, quotes]);
+  }, [filteredHoldings, quotes, fxRates]);
 
   const yearlyReturnsComputed = useMemo(
-    () => computeYearlyReturns(filteredHoldings, historyBySymbol),
-    [filteredHoldings, historyBySymbol]
+    () => computeYearlyReturns(filteredHoldings, historyBySymbol, fxRates),
+    [filteredHoldings, historyBySymbol, fxRates]
   );
   const yearlyReturns = useMemo(
     () => applyYearlyOverrides(yearlyReturnsComputed, yearlyOverrides),
@@ -271,8 +304,9 @@ export default function DashboardPage() {
           name: r.holding.name,
           value: r.marketValue,
           currency: r.holding.currency,
+          valueInBase: convertToKRW(r.marketValue, r.holding.currency, fxRates),
         })),
-    [rows]
+    [rows, fxRates]
   );
 
   function handleSave(values: HoldingFormValues) {
@@ -444,9 +478,9 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {summary.mixedCurrency && filteredHoldings.length > 0 && (
+      {fxIsMock && filteredHoldings.length > 0 && (
         <div className="mb-4 rounded border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-xs text-status-warning">
-          여러 통화의 종목을 함께 보유하고 있어 요약 지표는 환율 미반영 근사치입니다.
+          환율 실시간 연동 실패 - 근사 환율로 통화를 환산한 값입니다.
         </div>
       )}
 
@@ -520,7 +554,7 @@ export default function DashboardPage() {
         <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
           자산 배분
         </h2>
-        <AllocationChart slices={allocationSlices} />
+        <AllocationChart slices={allocationSlices} fxIsMock={fxIsMock} />
       </section>
 
       {selectedHolding && (

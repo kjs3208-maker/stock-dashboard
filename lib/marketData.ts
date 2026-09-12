@@ -1,3 +1,4 @@
+import { FxRates } from "./fx";
 import { HistoryResult, NewsResult, Quote } from "./types";
 
 export async function fetchQuote(symbol: string): Promise<Quote> {
@@ -41,5 +42,11 @@ export async function fetchNews(symbol: string, name: string): Promise<NewsResul
     `/api/news?symbol=${encodeURIComponent(symbol)}&name=${encodeURIComponent(name)}`
   );
   if (!res.ok) throw new Error(`news fetch failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchFxRates(): Promise<FxRates> {
+  const res = await fetch("/api/fx");
+  if (!res.ok) throw new Error(`fx fetch failed: ${res.status}`);
   return res.json();
 }

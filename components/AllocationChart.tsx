@@ -6,12 +6,14 @@ import { formatCurrency, formatPercent } from "@/lib/format";
 export interface AllocationSlice {
   symbol: string;
   name: string;
-  value: number; // market value in the holding's own currency
+  value: number; // market value in the holding's own currency (for display)
   currency: string;
+  valueInBase: number; // KRW-equivalent, used for the percentage math
 }
 
 interface AllocationChartProps {
   slices: AllocationSlice[];
+  fxIsMock?: boolean;
 }
 
 const SERIES_COLORS = [
@@ -27,13 +29,12 @@ const SERIES_COLORS = [
 
 const MAX_SLOTS = 8;
 
-export function AllocationChart({ slices }: AllocationChartProps) {
+export function AllocationChart({ slices, fxIsMock }: AllocationChartProps) {
   const [hovered, setHovered] = useState<string | null>(null);
 
-  const { segments, mixedCurrency } = useMemo(() => {
-    const sorted = [...slices].sort((a, b) => b.value - a.value);
-    const currencies = new Set(sorted.map((s) => s.currency));
-    const total = sorted.reduce((sum, s) => sum + s.value, 0);
+  const segments = useMemo(() => {
+    const sorted = [...slices].sort((a, b) => b.valueInBase - a.valueInBase);
+    const total = sorted.reduce((sum, s) => sum + s.valueInBase, 0);
 
     let visible = sorted;
     let other: AllocationSlice | null = null;
@@ -43,20 +44,18 @@ export function AllocationChart({ slices }: AllocationChartProps) {
       other = {
         symbol: "OTHER",
         name: "기타",
-        value: rest.reduce((sum, s) => sum + s.value, 0),
-        currency: rest[0]?.currency ?? "",
+        value: rest.reduce((sum, s) => sum + s.valueInBase, 0),
+        currency: "KRW",
+        valueInBase: rest.reduce((sum, s) => sum + s.valueInBase, 0),
       };
     }
     const all = other ? [...visible, other] : visible;
 
-    return {
-      segments: all.map((s, i) => ({
-        ...s,
-        percent: total > 0 ? (s.value / total) * 100 : 0,
-        color: SERIES_COLORS[i % SERIES_COLORS.length],
-      })),
-      mixedCurrency: currencies.size > 1,
-    };
+    return all.map((s, i) => ({
+      ...s,
+      percent: total > 0 ? (s.valueInBase / total) * 100 : 0,
+      color: SERIES_COLORS[i % SERIES_COLORS.length],
+    }));
   }, [slices]);
 
   if (segments.length === 0) {
@@ -119,9 +118,9 @@ export function AllocationChart({ slices }: AllocationChartProps) {
         ))}
       </div>
 
-      {mixedCurrency && (
+      {fxIsMock && (
         <div className="mt-2 text-xs text-status-warning">
-          여러 통화가 섞여 있어 환율 미반영 근사치입니다.
+          환율 실시간 연동 실패 - 근사 환율로 비중을 계산했습니다.
         </div>
       )}
     </div>

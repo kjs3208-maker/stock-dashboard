@@ -1,5 +1,6 @@
-import { Account, Dividend, Holding, HistoryPoint, Quote, Transaction } from "./types";
+import { Dividend, Holding, HistoryPoint, Quote, Transaction } from "./types";
 import { YearlyReturnOverrides } from "./storage";
+import { convertToKRW } from "./fx";
 
 export interface HoldingPosition {
   quantity: number;
@@ -184,15 +185,17 @@ export interface YearlyReturnPoint {
 }
 
 /**
- * Approximate portfolio-level yearly return, mixing every holding's raw
- * currency amounts without FX conversion. Mid-year buys/sells are folded
- * into the start/end totals as if held all year (a simplification, not a
- * true time-weighted return) - fine for a personal dashboard, not for
- * precise performance reporting.
+ * Approximate portfolio-level yearly return. Every holding's amounts are
+ * converted to KRW via `fxRatesToKRW` before summing, so mixed-currency
+ * portfolios combine correctly (pass {} to skip conversion). Mid-year
+ * buys/sells are folded into the start/end totals as if held all year (a
+ * simplification, not a true time-weighted return) - fine for a personal
+ * dashboard, not for precise performance reporting.
  */
 export function computeYearlyReturns(
   holdings: Holding[],
-  historyBySymbol: Record<string, HistoryPoint[]>
+  historyBySymbol: Record<string, HistoryPoint[]>,
+  fxRatesToKRW: Record<string, number> = {}
 ): YearlyReturnPoint[] {
   const positions = holdings.map((h) => ({ holding: h, position: computeHoldingPosition(h) }));
   const withBuys = positions.filter((p) => p.position.firstBuyDate != null);
@@ -254,8 +257,8 @@ export function computeYearlyReturns(
         )
         .reduce((sum, t) => sum + t.quantity * t.price, 0);
 
-      totalStart += startValue + buysDuringYear;
-      totalEnd += endValue + sellsDuringYear;
+      totalStart += convertToKRW(startValue + buysDuringYear, holding.currency, fxRatesToKRW);
+      totalEnd += convertToKRW(endValue + sellsDuringYear, holding.currency, fxRatesToKRW);
     }
 
     if (totalStart > 0) {
@@ -280,12 +283,4 @@ export function applyYearlyOverrides(
     byYear.set(year, { year, returnPercent: value, isManual: true });
   }
   return Array.from(byYear.values()).sort((a, b) => a.year - b.year);
-}
-
-export function totalCashBalance(accounts: Account[]): number {
-  return accounts.reduce((sum, a) => sum + a.cashBalance, 0);
-}
-
-export function totalDepositedSum(accounts: Account[]): number {
-  return accounts.reduce((sum, a) => sum + a.totalDeposited, 0);
 }
