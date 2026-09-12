@@ -1,6 +1,6 @@
 import { Dividend, Holding, HistoryPoint, Quote, Transaction } from "./types";
 import { YearlyReturnOverrides } from "./storage";
-import { convertToKRW } from "./fx";
+import { convertFromKRW, convertToKRW } from "./fx";
 
 export interface HoldingPosition {
   quantity: number;
@@ -75,15 +75,27 @@ export interface DividendTotals {
   expectedTotal: number; // pending, not yet confirmed
 }
 
-export function computeDividendTotals(dividends: Dividend[]): DividendTotals {
+/**
+ * Sums a holding's dividends into its own currency. A dividend recorded in
+ * a different currency than the holding (e.g. a USD stock's dividend paid
+ * out in KRW) is converted via `fxRates` first, so the total is never a
+ * meaningless mix of currencies.
+ */
+export function computeDividendTotals(
+  dividends: Dividend[],
+  holdingCurrency: string,
+  fxRatesToKRW: Record<string, number> = {}
+): DividendTotals {
   let confirmedTotal = 0;
   let expectedTotal = 0;
   for (const d of dividends) {
-    if (d.status === "confirmed") {
-      confirmedTotal += d.confirmedAmount ?? d.expectedAmount;
-    } else {
-      expectedTotal += d.expectedAmount;
-    }
+    const amount = d.status === "confirmed" ? d.confirmedAmount ?? d.expectedAmount : d.expectedAmount;
+    const converted =
+      d.currency === holdingCurrency
+        ? amount
+        : convertFromKRW(convertToKRW(amount, d.currency, fxRatesToKRW), holdingCurrency, fxRatesToKRW);
+    if (d.status === "confirmed") confirmedTotal += converted;
+    else expectedTotal += converted;
   }
   return { confirmedTotal, expectedTotal };
 }
@@ -104,11 +116,15 @@ export interface HoldingMetrics {
   dayChangePercent: number;
 }
 
-export function computeHoldingMetrics(holding: Holding, quote: Quote | null): HoldingMetrics {
+export function computeHoldingMetrics(
+  holding: Holding,
+  quote: Quote | null,
+  fxRatesToKRW: Record<string, number> = {}
+): HoldingMetrics {
   const position = computeHoldingPosition(holding);
   const costBasis = position.quantity * position.avgCost;
   const { confirmedTotal: confirmedDividends, expectedTotal: expectedDividends } =
-    computeDividendTotals(holding.dividends);
+    computeDividendTotals(holding.dividends, holding.currency, fxRatesToKRW);
 
   if (!quote) {
     const totalPnl = position.realizedPnl + confirmedDividends;

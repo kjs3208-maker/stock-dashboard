@@ -82,6 +82,14 @@ export function HoldingsTable({
                   </div>
                   <div className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">
                     <span>{holding.symbol}</span>
+                    {quantity === 0 && holding.transactions.length > 0 && (
+                      <span
+                        title="전량 매도되어 실현손익만 남은 종목입니다"
+                        className="rounded bg-ink-muted/20 px-1 text-ink-secondary dark:text-ink-secondary-dark"
+                      >
+                        청산완료
+                      </span>
+                    )}
                     {accountName && (
                       <span className="rounded bg-ink-muted/10 px-1 text-ink-secondary dark:text-ink-secondary-dark">
                         {accountName}

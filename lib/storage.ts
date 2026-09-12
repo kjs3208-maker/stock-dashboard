@@ -41,6 +41,15 @@ export function createWatchlistId(): string {
 // Anything already read from storage without a `transactions` array is that
 // older shape - fold it into one synthetic "buy" transaction so existing
 // portfolios keep working after this upgrade.
+interface LegacyDividend {
+  id: string;
+  date: string;
+  expectedAmount: number;
+  currency?: string;
+  status: "expected" | "confirmed";
+  confirmedAmount?: number;
+}
+
 interface LegacyHolding {
   id: string;
   symbol: string;
@@ -51,12 +60,19 @@ interface LegacyHolding {
   buyDate?: string;
   manualPrice?: number;
   accountId?: string;
+  note?: string;
+  targetWeightPercent?: number;
   transactions?: Transaction[];
-  dividends?: Dividend[];
+  dividends?: LegacyDividend[];
+}
+
+function migrateDividends(raw: LegacyDividend[] | undefined, holdingCurrency: string): Dividend[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((d) => ({ ...d, currency: d.currency ?? holdingCurrency }));
 }
 
 function migrateHolding(raw: LegacyHolding): Holding {
-  const dividends = Array.isArray(raw.dividends) ? raw.dividends : [];
+  const dividends = migrateDividends(raw.dividends, raw.currency);
 
   if (Array.isArray(raw.transactions)) {
     return {
@@ -66,6 +82,8 @@ function migrateHolding(raw: LegacyHolding): Holding {
       currency: raw.currency,
       accountId: raw.accountId,
       manualPrice: raw.manualPrice,
+      note: raw.note,
+      targetWeightPercent: raw.targetWeightPercent,
       transactions: raw.transactions,
       dividends,
     };
@@ -89,6 +107,8 @@ function migrateHolding(raw: LegacyHolding): Holding {
     currency: raw.currency,
     accountId: raw.accountId,
     manualPrice: raw.manualPrice,
+    note: raw.note,
+    targetWeightPercent: raw.targetWeightPercent,
     transactions,
     dividends,
   };

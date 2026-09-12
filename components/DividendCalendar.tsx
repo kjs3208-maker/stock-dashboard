@@ -55,7 +55,7 @@ export function DividendCalendar({ holdings }: DividendCalendarProps) {
                   <span className="text-xs text-ink-muted">{formatDate(dividend.date)}</span>
                 </div>
                 <span className="tabular-nums text-ink-primary dark:text-ink-primary-dark">
-                  {formatCurrency(dividend.confirmedAmount ?? dividend.expectedAmount, holding.currency)}
+                  {formatCurrency(dividend.confirmedAmount ?? dividend.expectedAmount, dividend.currency)}
                 </span>
               </li>
             ))}

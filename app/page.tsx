@@ -201,7 +201,7 @@ export default function DashboardPage() {
     () =>
       filteredHoldings.map((holding) => {
         const quote = getEffectiveQuote(holding, quotes);
-        const metrics = computeHoldingMetrics(holding, quote);
+        const metrics = computeHoldingMetrics(holding, quote, fxRates);
         const accountName = accounts.find((a) => a.id === holding.accountId)?.name ?? null;
         return {
           holding,
@@ -214,7 +214,7 @@ export default function DashboardPage() {
           accountName,
         };
       }),
-    [filteredHoldings, quotes, accounts]
+    [filteredHoldings, quotes, accounts, fxRates]
   );
 
   const relevantAccounts = useMemo(
@@ -254,7 +254,7 @@ export default function DashboardPage() {
 
     for (const holding of filteredHoldings) {
       const quote = getEffectiveQuote(holding, quotes);
-      const metrics = computeHoldingMetrics(holding, quote);
+      const metrics = computeHoldingMetrics(holding, quote, fxRates);
       const toKRW = (amount: number) => convertToKRW(amount, holding.currency, fxRates);
       totalStockValue += toKRW(metrics.marketValue);
       totalInvested += toKRW(metrics.totalInvested);
@@ -451,7 +451,10 @@ export default function DashboardPage() {
     );
   }
 
-  function handleAddDividend(holdingId: string, dividend: { date: string; expectedAmount: number }) {
+  function handleAddDividend(
+    holdingId: string,
+    dividend: { date: string; expectedAmount: number; currency: string }
+  ) {
     setHoldings((prev) =>
       prev.map((h) =>
         h.id === holdingId

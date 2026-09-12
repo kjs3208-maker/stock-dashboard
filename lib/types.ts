@@ -23,6 +23,8 @@ export interface Dividend {
   id: string;
   date: string; // ISO date - expected or actual pay date
   expectedAmount: number;
+  currency: string; // may differ from the holding's own currency, e.g. a
+  // USD stock's dividend paid out (and recorded) in KRW
   status: DividendStatus;
   confirmedAmount?: number; // may differ from expectedAmount once confirmed
 }

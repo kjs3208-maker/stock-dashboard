@@ -6,10 +6,12 @@ import { formatCurrency, formatDate } from "@/lib/format";
 
 interface DividendsPanelProps {
   holding: Holding;
-  onAdd: (dividend: { date: string; expectedAmount: number }) => void;
+  onAdd: (dividend: { date: string; expectedAmount: number; currency: string }) => void;
   onConfirm: (dividendId: string, confirmedAmount: number) => void;
   onDelete: (dividendId: string) => void;
 }
+
+const CURRENCIES = ["KRW", "USD", "JPY", "EUR", "HKD"];
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -18,6 +20,7 @@ function todayIso(): string {
 export function DividendsPanel({ holding, onAdd, onConfirm, onDelete }: DividendsPanelProps) {
   const [date, setDate] = useState(todayIso());
   const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState(holding.currency);
   const [error, setError] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [confirmAmount, setConfirmAmount] = useState("");
@@ -33,7 +36,7 @@ export function DividendsPanel({ holding, onAdd, onConfirm, onDelete }: Dividend
       return;
     }
     setError(null);
-    onAdd({ date, expectedAmount: value });
+    onAdd({ date, expectedAmount: value, currency });
     setAmount("");
   }
 
@@ -98,7 +101,7 @@ export function DividendsPanel({ holding, onAdd, onConfirm, onDelete }: Dividend
               ) : (
                 <div className="flex items-center gap-2">
                   <span className="tabular-nums text-ink-primary dark:text-ink-primary-dark">
-                    {formatCurrency(d.confirmedAmount ?? d.expectedAmount, holding.currency)}
+                    {formatCurrency(d.confirmedAmount ?? d.expectedAmount, d.currency)}
                   </span>
                   {d.status === "expected" && (
                     <button
@@ -140,6 +143,20 @@ export function DividendsPanel({ holding, onAdd, onConfirm, onDelete }: Dividend
             onChange={(e) => setAmount(e.target.value)}
             className="w-28 rounded border border-line-hairline bg-transparent px-2 py-1.5 text-sm tabular-nums dark:border-line-hairline-dark"
           />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="text-ink-secondary dark:text-ink-secondary-dark">통화</span>
+          <select
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
+            className="rounded border border-line-hairline bg-transparent px-2 py-1.5 text-sm dark:border-line-hairline-dark"
+          >
+            {CURRENCIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </label>
         <button
           onClick={handleAdd}
