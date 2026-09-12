@@ -142,6 +142,7 @@ interface LegacyAccount {
   currency: string;
   cashBalance: number;
   totalDeposited?: number;
+  manualRealizedPnl?: number;
 }
 
 export function loadAccounts(): Account[] {
@@ -154,6 +155,7 @@ export function loadAccounts(): Account[] {
     return (parsed as LegacyAccount[]).map((a) => ({
       ...a,
       totalDeposited: a.totalDeposited ?? 0,
+      manualRealizedPnl: a.manualRealizedPnl ?? 0,
     }));
   } catch {
     return [];

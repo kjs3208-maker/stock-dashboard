@@ -32,7 +32,14 @@ export function AccountManagerModal({
   function addRow() {
     setDraft((prev) => [
       ...prev,
-      { id: createAccountId(), name: "", currency: "KRW", cashBalance: 0, totalDeposited: 0 },
+      {
+        id: createAccountId(),
+        name: "",
+        currency: "KRW",
+        cashBalance: 0,
+        totalDeposited: 0,
+        manualRealizedPnl: 0,
+      },
     ]);
   }
 
@@ -65,7 +72,9 @@ export function AccountManagerModal({
 
         <p className="mb-3 text-xs text-ink-muted">
           예수금은 지금 계좌에 남아있는 현금, 계좌투입금은 지금까지 이 계좌에 넣은 총 금액입니다.
-          둘은 따로 관리되며, 총자산·투입금 대비 달성률 계산에 각각 쓰입니다.
+          둘은 따로 관리되며, 총자산·투입금 대비 달성률 계산에 각각 쓰입니다. 실현손익 일괄
+          입력은 이미 매도를 마친 거래들을 종목별로 일일이 입력하기 어려울 때, 그 합계 금액을
+          한 번에 넣기 위한 항목입니다 (종목별 거래내역으로 계산된 실현손익에 더해집니다).
         </p>
 
         <div className="flex flex-col gap-3">
@@ -116,6 +125,20 @@ export function AccountManagerModal({
                     inputMode="decimal"
                     value={a.totalDeposited}
                     onChange={(e) => updateRow(a.id, { totalDeposited: Number(e.target.value) })}
+                    className="rounded border border-line-hairline bg-transparent px-2 py-1.5 text-right text-sm tabular-nums dark:border-line-hairline-dark"
+                  />
+                </label>
+                <label className="col-span-2 flex flex-col gap-1 text-xs">
+                  <span className="text-ink-secondary dark:text-ink-secondary-dark">
+                    실현손익 일괄 입력 (선택)
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={a.manualRealizedPnl ?? 0}
+                    onChange={(e) =>
+                      updateRow(a.id, { manualRealizedPnl: Number(e.target.value) })
+                    }
                     className="rounded border border-line-hairline bg-transparent px-2 py-1.5 text-right text-sm tabular-nums dark:border-line-hairline-dark"
                   />
                 </label>

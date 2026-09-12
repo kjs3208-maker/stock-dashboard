@@ -4,6 +4,9 @@ export interface Account {
   currency: string; // currency the cash balance is held in
   cashBalance: number; // 예수금 - cash currently sitting in the account
   totalDeposited: number; // 계좌투입금 - cumulative capital ever put into the account
+  manualRealizedPnl?: number; // 실현손익 일괄 입력 - a lump sum for gains/losses already
+  // realized on trades whose individual buy/sell transactions were never
+  // entered per holding; added on top of any per-holding realized P&L
 }
 
 export type TransactionType = "buy" | "sell";

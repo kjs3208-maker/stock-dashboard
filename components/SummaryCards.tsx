@@ -7,6 +7,7 @@ interface SummaryCardsProps {
   totalCash: number;
   totalCost: number;
   realizedPnl: number;
+  manualRealizedPnl: number; // portion of realizedPnl entered as an account-level lump sum
   unrealizedPnl: number;
   confirmedDividends: number;
   expectedDividends: number;
@@ -89,6 +90,7 @@ export function SummaryCards({
   totalCash,
   totalCost,
   realizedPnl,
+  manualRealizedPnl,
   unrealizedPnl,
   confirmedDividends,
   expectedDividends,
@@ -164,6 +166,11 @@ export function SummaryCards({
           label="실현손익 (매도)"
           value={`${realizedPnl >= 0 ? "+" : ""}${formatCurrency(realizedPnl, currency)}`}
           valueClassName={deltaColorClass(realizedPnl)}
+          sub={
+            manualRealizedPnl !== 0
+              ? `일괄 입력분 ${formatCurrency(manualRealizedPnl, currency)} 포함`
+              : undefined
+          }
         />
         <Tile
           label="평가손익 (미실현)"

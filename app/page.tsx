@@ -240,6 +240,15 @@ export default function DashboardPage() {
     [relevantAccounts, fxRates]
   );
 
+  const manualRealizedPnlTotal = useMemo(
+    () =>
+      relevantAccounts.reduce(
+        (sum, a) => sum + convertToKRW(a.manualRealizedPnl ?? 0, a.currency, fxRates),
+        0
+      ),
+    [relevantAccounts, fxRates]
+  );
+
   const summary = useMemo(() => {
     let totalStockValue = 0;
     let totalInvested = 0;
@@ -585,12 +594,17 @@ export default function DashboardPage() {
           totalStockValue={summary.totalStockValue}
           totalCash={cashTotal}
           totalCost={summary.totalCost}
-          realizedPnl={summary.realizedPnl}
+          realizedPnl={summary.realizedPnl + manualRealizedPnlTotal}
+          manualRealizedPnl={manualRealizedPnlTotal}
           unrealizedPnl={summary.unrealizedPnl}
           confirmedDividends={summary.confirmedDividends}
           expectedDividends={summary.expectedDividends}
-          totalPnl={summary.totalPnl}
-          totalPnlPercent={summary.totalPnlPercent}
+          totalPnl={summary.totalPnl + manualRealizedPnlTotal}
+          totalPnlPercent={
+            summary.totalCost > 0
+              ? ((summary.totalPnl + manualRealizedPnlTotal) / summary.totalCost) * 100
+              : 0
+          }
           dayChange={summary.dayChange}
           dayChangePercent={summary.dayChangePercent}
           bestSymbol={summary.bestSymbol}
