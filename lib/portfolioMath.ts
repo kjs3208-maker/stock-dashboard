@@ -16,6 +16,53 @@ export function effectiveTotalDeposited(account: Account): number {
   return account.totalDeposited;
 }
 
+export interface YearlyPrincipalPoint {
+  year: number;
+  principal: number; // cumulative 총 투입원금 as of that year's end, in KRW
+}
+
+/**
+ * Cumulative invested principal (총 투입원금) by year end, across every
+ * account, converted to KRW. Accounts with a dated deposit log contribute
+ * each deposit to the year it actually happened, so the "26년도 시작금액"
+ * (principal carried in from before this year) plus "이번 해 투입액" both
+ * fall naturally out of the running total. Accounts still using the plain
+ * `totalDeposited` number (no dated log) have no year to attribute their
+ * capital to, so - same simplification as everywhere else this app mixes
+ * dated and undated figures - that whole amount counts as already present
+ * in every year shown.
+ */
+export function computeYearlyPrincipal(
+  accounts: Account[],
+  years: number[],
+  fxRatesToKRW: Record<string, number> = {}
+): YearlyPrincipalPoint[] {
+  let flatTotal = 0;
+  const depositsByYear = new Map<number, number>();
+
+  for (const account of accounts) {
+    const deposits = account.deposits ?? [];
+    if (deposits.length === 0) {
+      flatTotal += convertToKRW(account.totalDeposited, account.currency, fxRatesToKRW);
+      continue;
+    }
+    for (const d of deposits) {
+      const year = new Date(d.date).getFullYear();
+      const converted = convertToKRW(d.amount, account.currency, fxRatesToKRW);
+      depositsByYear.set(year, (depositsByYear.get(year) ?? 0) + converted);
+    }
+  }
+
+  const sortedYears = [...years].sort((a, b) => a - b);
+  let running = flatTotal;
+  const results: YearlyPrincipalPoint[] = [];
+  for (const year of sortedYears) {
+    running += depositsByYear.get(year) ?? 0;
+    results.push({ year, principal: running });
+  }
+  return results;
+}
+
 export interface HoldingPosition {
   quantity: number;
   avgCost: number;

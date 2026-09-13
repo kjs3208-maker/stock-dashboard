@@ -47,6 +47,7 @@ import {
 import {
   applyYearlyOverrides,
   computeHoldingMetrics,
+  computeYearlyPrincipal,
   computeYearlyReturns,
   effectiveTotalDeposited,
   estimateForeignCapitalGainsTax,
@@ -58,6 +59,7 @@ import { HoldingFormModal, HoldingFormValues } from "@/components/HoldingFormMod
 import { AllocationChart } from "@/components/AllocationChart";
 import { PriceHistoryChart } from "@/components/PriceHistoryChart";
 import { YearlyReturnChart } from "@/components/YearlyReturnChart";
+import { YearlyPrincipalTable } from "@/components/YearlyPrincipalTable";
 import { YearlyReturnOverrideForm } from "@/components/YearlyReturnOverrideForm";
 import { AccountManagerModal } from "@/components/AccountManagerModal";
 import { TargetAmountModal } from "@/components/TargetAmountModal";
@@ -463,6 +465,11 @@ export default function DashboardPage() {
       .filter((y) => y <= currentYear)
       .sort((a, b) => a - b);
   }, [yearlyReturnsComputed, yearlyOverrides]);
+
+  const yearlyPrincipal = useMemo(
+    () => computeYearlyPrincipal(relevantAccounts, overrideYearOptions, fxRates),
+    [relevantAccounts, overrideYearOptions, fxRates]
+  );
 
   const foreignTaxEstimate = useMemo(
     () => estimateForeignCapitalGainsTax(filteredHoldings, new Date().getFullYear(), fxRates),
@@ -999,6 +1006,11 @@ export default function DashboardPage() {
           연도별 실현손익
         </h2>
         <YearlyReturnChart data={yearlyReturns} currency={DISPLAY_CURRENCY} />
+        <YearlyPrincipalTable
+          returns={yearlyReturns}
+          principal={yearlyPrincipal}
+          currency={DISPLAY_CURRENCY}
+        />
         <YearlyReturnOverrideForm
           key={hydrated ? "hydrated" : "loading"}
           years={overrideYearOptions}
