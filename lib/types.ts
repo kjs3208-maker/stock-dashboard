@@ -86,3 +86,15 @@ export interface NewsItem {
   url: string;
   publishedAt: string; // ISO date
 }
+
+export type ResearchNoteCategory = "종목분석" | "인사이트" | "일반";
+
+export interface ResearchNote {
+  id: string;
+  title: string;
+  content: string; // markdown
+  category: ResearchNoteCategory;
+  symbol?: string; // optional link to a holding/watchlist symbol
+  createdAt: string; // ISO date
+  updatedAt: string; // ISO date
+}

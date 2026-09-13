@@ -1,21 +1,33 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Account, Holding, HistoryPoint, Quote, Transaction, WatchlistItem } from "@/lib/types";
+import {
+  Account,
+  Holding,
+  HistoryPoint,
+  Quote,
+  ResearchNote,
+  ResearchNoteCategory,
+  Transaction,
+  WatchlistItem,
+} from "@/lib/types";
 import {
   BackupData,
   createDividendId,
   createHoldingId,
+  createResearchNoteId,
   createTransactionId,
   createWatchlistId,
   importBackup,
   loadAccounts,
   loadHoldings,
+  loadResearchNotes,
   loadTargetAmount,
   loadWatchlist,
   loadYearlyReturnOverrides,
   saveAccounts,
   saveHoldings,
+  saveResearchNotes,
   saveTargetAmount,
   saveWatchlist,
   saveYearlyReturnOverrides,
@@ -55,6 +67,7 @@ import { RebalancePanel } from "@/components/RebalancePanel";
 import { AnalysisModal } from "@/components/AnalysisModal";
 import { BackupControls } from "@/components/BackupControls";
 import { TaxEstimatePanel } from "@/components/TaxEstimatePanel";
+import { ResearchNotesPanel } from "@/components/ResearchNotesPanel";
 
 const DISPLAY_CURRENCY = "KRW";
 const ALL_ACCOUNTS = "all";
@@ -88,6 +101,7 @@ export default function DashboardPage() {
   const [syncPasscodeInput, setSyncPasscodeInput] = useState("");
   const [syncBusy, setSyncBusy] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [researchNotes, setResearchNotes] = useState<ResearchNote[]>([]);
 
   // Fetch exchange rates once - used to combine holdings/accounts that
   // aren't all in the same currency into one meaningful total.
@@ -118,6 +132,7 @@ export default function DashboardPage() {
     setTargetAmount(loadTargetAmount());
     setYearlyOverrides(loadYearlyReturnOverrides());
     setWatchlist(loadWatchlist());
+    setResearchNotes(loadResearchNotes());
     /* eslint-enable react-hooks/set-state-in-effect */
     setHydrated(true);
   }, []);
@@ -137,6 +152,9 @@ export default function DashboardPage() {
   useEffect(() => {
     if (hydrated) saveWatchlist(watchlist);
   }, [watchlist, hydrated]);
+  useEffect(() => {
+    if (hydrated) saveResearchNotes(researchNotes);
+  }, [researchNotes, hydrated]);
 
   // Once local state is loaded, see if server-side sync (Upstash + a shared
   // passcode) is configured at all. If it is and this device already knows
@@ -155,6 +173,7 @@ export default function DashboardPage() {
           setTargetAmount(result.payload.data.targetAmount ?? null);
           setYearlyOverrides(result.payload.data.yearlyReturnOverrides ?? {});
           setWatchlist(result.payload.data.watchlist ?? []);
+          setResearchNotes(result.payload.data.researchNotes ?? []);
           setLastSyncedAt(result.payload.updatedAt);
         }
       }
@@ -178,6 +197,7 @@ export default function DashboardPage() {
       targetAmount,
       yearlyReturnOverrides: yearlyOverrides,
       watchlist,
+      researchNotes,
     };
     const timeout = setTimeout(() => {
       pushRemoteState(passcode, data).then((ok) => {
@@ -185,7 +205,16 @@ export default function DashboardPage() {
       });
     }, 1500);
     return () => clearTimeout(timeout);
-  }, [holdings, accounts, targetAmount, yearlyOverrides, watchlist, hydrated, syncStatus]);
+  }, [
+    holdings,
+    accounts,
+    targetAmount,
+    yearlyOverrides,
+    watchlist,
+    researchNotes,
+    hydrated,
+    syncStatus,
+  ]);
 
   async function handleUnlockSync() {
     const passcode = syncPasscodeInput.trim();
@@ -203,6 +232,7 @@ export default function DashboardPage() {
         setTargetAmount(result.payload.data.targetAmount ?? null);
         setYearlyOverrides(result.payload.data.yearlyReturnOverrides ?? {});
         setWatchlist(result.payload.data.watchlist ?? []);
+        setResearchNotes(result.payload.data.researchNotes ?? []);
         setLastSyncedAt(result.payload.updatedAt);
       } else {
         const data: BackupData = {
@@ -213,6 +243,7 @@ export default function DashboardPage() {
           targetAmount,
           yearlyReturnOverrides: yearlyOverrides,
           watchlist,
+          researchNotes,
         };
         pushRemoteState(passcode, data).then((ok) => {
           if (ok) setLastSyncedAt(data.exportedAt);
@@ -624,6 +655,33 @@ export default function DashboardPage() {
     setTargetAmount(data.targetAmount ?? null);
     setYearlyOverrides(data.yearlyReturnOverrides ?? {});
     setWatchlist(data.watchlist ?? []);
+    setResearchNotes(data.researchNotes ?? []);
+  }
+
+  function handleAddResearchNote(note: {
+    title: string;
+    content: string;
+    category: ResearchNoteCategory;
+    symbol?: string;
+  }) {
+    const now = new Date().toISOString();
+    setResearchNotes((prev) => [
+      ...prev,
+      { id: createResearchNoteId(), createdAt: now, updatedAt: now, ...note },
+    ]);
+  }
+
+  function handleUpdateResearchNote(
+    id: string,
+    patch: { title: string; content: string; category: ResearchNoteCategory; symbol?: string }
+  ) {
+    setResearchNotes((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: new Date().toISOString() } : n))
+    );
+  }
+
+  function handleDeleteResearchNote(id: string) {
+    setResearchNotes((prev) => prev.filter((n) => n.id !== id));
   }
 
   const selectedHolding = holdings.find((h) => h.symbol === selectedSymbol) ?? null;
@@ -793,6 +851,18 @@ export default function DashboardPage() {
           onDelete={handleDeleteWatchlistItem}
           onConvert={handleConvertWatchlistItem}
           onAnalyze={setAnalysisTarget}
+        />
+      </section>
+
+      <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
+        <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+          리서치 노트
+        </h2>
+        <ResearchNotesPanel
+          notes={researchNotes}
+          onAdd={handleAddResearchNote}
+          onUpdate={handleUpdateResearchNote}
+          onDelete={handleDeleteResearchNote}
         />
       </section>
 

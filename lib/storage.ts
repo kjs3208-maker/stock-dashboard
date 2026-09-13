@@ -1,10 +1,11 @@
-import { Account, Dividend, Holding, Transaction, WatchlistItem } from "./types";
+import { Account, Dividend, Holding, ResearchNote, Transaction, WatchlistItem } from "./types";
 
 const HOLDINGS_KEY = "stock-dashboard.holdings.v1";
 const ACCOUNTS_KEY = "stock-dashboard.accounts.v1";
 const TARGET_AMOUNT_KEY = "stock-dashboard.targetAmount.v1";
 const YEARLY_OVERRIDES_KEY = "stock-dashboard.yearlyReturnOverrides.v1";
 const WATCHLIST_KEY = "stock-dashboard.watchlist.v1";
+const RESEARCH_NOTES_KEY = "stock-dashboard.researchNotes.v1";
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";
@@ -35,6 +36,10 @@ export function createDividendId(): string {
 
 export function createWatchlistId(): string {
   return createId("w");
+}
+
+export function createResearchNoteId(): string {
+  return createId("r");
 }
 
 // Pre-transactions holdings stored a single quantity/avgBuyPrice/buyDate.
@@ -244,6 +249,28 @@ export function saveWatchlist(items: WatchlistItem[]): void {
   }
 }
 
+export function loadResearchNotes(): ResearchNote[] {
+  if (!isBrowser()) return [];
+  try {
+    const raw = window.localStorage.getItem(RESEARCH_NOTES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed as ResearchNote[];
+  } catch {
+    return [];
+  }
+}
+
+export function saveResearchNotes(notes: ResearchNote[]): void {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.setItem(RESEARCH_NOTES_KEY, JSON.stringify(notes));
+  } catch {
+    // ignore
+  }
+}
+
 export interface BackupData {
   version: 1;
   exportedAt: string;
@@ -252,6 +279,7 @@ export interface BackupData {
   targetAmount: number | null;
   yearlyReturnOverrides: YearlyReturnOverrides;
   watchlist: WatchlistItem[];
+  researchNotes?: ResearchNote[];
 }
 
 export function exportBackup(): BackupData {
@@ -263,6 +291,7 @@ export function exportBackup(): BackupData {
     targetAmount: loadTargetAmount(),
     yearlyReturnOverrides: loadYearlyReturnOverrides(),
     watchlist: loadWatchlist(),
+    researchNotes: loadResearchNotes(),
   };
 }
 
@@ -272,4 +301,5 @@ export function importBackup(data: BackupData): void {
   saveTargetAmount(data.targetAmount ?? null);
   if (data.yearlyReturnOverrides) saveYearlyReturnOverrides(data.yearlyReturnOverrides);
   if (Array.isArray(data.watchlist)) saveWatchlist(data.watchlist);
+  if (Array.isArray(data.researchNotes)) saveResearchNotes(data.researchNotes);
 }
