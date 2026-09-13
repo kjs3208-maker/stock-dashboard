@@ -24,6 +24,14 @@ import {
 import { fetchFxRates, fetchHistory, fetchQuotes } from "@/lib/marketData";
 import { convertFromKRW, convertToKRW } from "@/lib/fx";
 import {
+  checkRemoteSync,
+  clearSyncPasscode,
+  loadSyncPasscode,
+  pushRemoteState,
+  saveSyncPasscode,
+  SyncStatus,
+} from "@/lib/sync";
+import {
   applyYearlyOverrides,
   computeHoldingMetrics,
   computeYearlyReturns,
@@ -76,6 +84,10 @@ export default function DashboardPage() {
   const [analysisTarget, setAnalysisTarget] = useState<{ symbol: string; name: string } | null>(
     null
   );
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | "checking">("checking");
+  const [syncPasscodeInput, setSyncPasscodeInput] = useState("");
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   // Fetch exchange rates once - used to combine holdings/accounts that
   // aren't all in the same currency into one meaningful total.
@@ -125,6 +137,100 @@ export default function DashboardPage() {
   useEffect(() => {
     if (hydrated) saveWatchlist(watchlist);
   }, [watchlist, hydrated]);
+
+  // Once local state is loaded, see if server-side sync (Upstash + a shared
+  // passcode) is configured at all. If it is and this device already knows
+  // the passcode, pull whatever's stored remotely and adopt it as this
+  // device's state, so every device converges on the same data.
+  useEffect(() => {
+    if (!hydrated) return;
+    let cancelled = false;
+    checkRemoteSync(loadSyncPasscode()).then((result) => {
+      if (cancelled) return;
+      if (result.status === "unlocked") {
+        if (result.payload) {
+          importBackup(result.payload.data);
+          setHoldings(result.payload.data.holdings ?? []);
+          setAccounts(result.payload.data.accounts ?? []);
+          setTargetAmount(result.payload.data.targetAmount ?? null);
+          setYearlyOverrides(result.payload.data.yearlyReturnOverrides ?? {});
+          setWatchlist(result.payload.data.watchlist ?? []);
+          setLastSyncedAt(result.payload.updatedAt);
+        }
+      }
+      setSyncStatus(result.status);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated]);
+
+  // Push this device's state to the shared store shortly after any change,
+  // once unlocked - so other devices see it the next time they check in.
+  useEffect(() => {
+    if (!hydrated || syncStatus !== "unlocked") return;
+    const passcode = loadSyncPasscode();
+    const data: BackupData = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      holdings,
+      accounts,
+      targetAmount,
+      yearlyReturnOverrides: yearlyOverrides,
+      watchlist,
+    };
+    const timeout = setTimeout(() => {
+      pushRemoteState(passcode, data).then((ok) => {
+        if (ok) setLastSyncedAt(data.exportedAt);
+      });
+    }, 1500);
+    return () => clearTimeout(timeout);
+  }, [holdings, accounts, targetAmount, yearlyOverrides, watchlist, hydrated, syncStatus]);
+
+  async function handleUnlockSync() {
+    const passcode = syncPasscodeInput.trim();
+    if (!passcode) return;
+    setSyncBusy(true);
+    const result = await checkRemoteSync(passcode);
+    setSyncBusy(false);
+    if (result.status === "unlocked") {
+      saveSyncPasscode(passcode);
+      setSyncPasscodeInput("");
+      if (result.payload) {
+        importBackup(result.payload.data);
+        setHoldings(result.payload.data.holdings ?? []);
+        setAccounts(result.payload.data.accounts ?? []);
+        setTargetAmount(result.payload.data.targetAmount ?? null);
+        setYearlyOverrides(result.payload.data.yearlyReturnOverrides ?? {});
+        setWatchlist(result.payload.data.watchlist ?? []);
+        setLastSyncedAt(result.payload.updatedAt);
+      } else {
+        const data: BackupData = {
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          holdings,
+          accounts,
+          targetAmount,
+          yearlyReturnOverrides: yearlyOverrides,
+          watchlist,
+        };
+        pushRemoteState(passcode, data).then((ok) => {
+          if (ok) setLastSyncedAt(data.exportedAt);
+        });
+      }
+      setSyncStatus("unlocked");
+    } else if (result.status === "locked") {
+      alert("비밀번호가 올바르지 않습니다.");
+    } else {
+      alert("동기화 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+  }
+
+  function handleDisconnectSync() {
+    clearSyncPasscode();
+    setLastSyncedAt(null);
+    setSyncStatus("locked");
+  }
 
   // Fall back to the first holding whenever the user's pick is unset or no
   // longer exists - derived directly in render, no effect needed.
@@ -584,6 +690,47 @@ export default function DashboardPage() {
       {fxIsMock && filteredHoldings.length > 0 && (
         <div className="mb-4 rounded border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-xs text-status-warning">
           환율 실시간 연동 실패 - 근사 환율로 통화를 환산한 값입니다.
+        </div>
+      )}
+
+      {syncStatus === "locked" && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded border border-line-hairline bg-plane px-3 py-2 text-xs dark:border-line-hairline-dark dark:bg-plane-dark">
+          <span className="text-ink-secondary dark:text-ink-secondary-dark">
+            ☁️ 기기 간 자동 동기화가 설정되어 있습니다. 비밀번호를 입력하면 이 기기에서도 같은
+            데이터를 볼 수 있어요.
+          </span>
+          <input
+            type="password"
+            value={syncPasscodeInput}
+            onChange={(e) => setSyncPasscodeInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleUnlockSync();
+            }}
+            placeholder="동기화 비밀번호"
+            className="rounded border border-line-hairline bg-transparent px-2 py-1 dark:border-line-hairline-dark"
+          />
+          <button
+            onClick={handleUnlockSync}
+            disabled={syncBusy}
+            className="rounded bg-series-1 px-3 py-1 text-white hover:opacity-90 disabled:opacity-50"
+          >
+            연결
+          </button>
+        </div>
+      )}
+
+      {syncStatus === "unlocked" && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded border border-status-good/30 bg-status-good/10 px-3 py-2 text-xs text-status-good">
+          <span>
+            ☁️ 동기화 켜짐
+            {lastSyncedAt ? ` · 마지막 동기화 ${new Date(lastSyncedAt).toLocaleString("ko-KR")}` : ""}
+          </span>
+          <button
+            onClick={handleDisconnectSync}
+            className="rounded px-2 py-1 text-ink-muted hover:bg-plane dark:hover:bg-plane-dark"
+          >
+            연결 해제
+          </button>
         </div>
       )}
 
