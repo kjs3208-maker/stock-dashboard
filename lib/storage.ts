@@ -1,4 +1,12 @@
-import { Account, Dividend, Holding, ResearchNote, Transaction, WatchlistItem } from "./types";
+import {
+  Account,
+  AccountDeposit,
+  Dividend,
+  Holding,
+  ResearchNote,
+  Transaction,
+  WatchlistItem,
+} from "./types";
 
 const HOLDINGS_KEY = "stock-dashboard.holdings.v1";
 const ACCOUNTS_KEY = "stock-dashboard.accounts.v1";
@@ -40,6 +48,10 @@ export function createWatchlistId(): string {
 
 export function createResearchNoteId(): string {
   return createId("r");
+}
+
+export function createAccountDepositId(): string {
+  return createId("ad");
 }
 
 // Pre-transactions holdings stored a single quantity/avgBuyPrice/buyDate.
@@ -147,6 +159,7 @@ interface LegacyAccount {
   currency: string;
   cashBalance: number;
   totalDeposited?: number;
+  deposits?: AccountDeposit[];
   manualRealizedPnl?: number;
   manualConfirmedDividends?: number;
 }
@@ -161,6 +174,7 @@ export function loadAccounts(): Account[] {
     return (parsed as LegacyAccount[]).map((a) => ({
       ...a,
       totalDeposited: a.totalDeposited ?? 0,
+      deposits: Array.isArray(a.deposits) ? a.deposits : [],
       manualRealizedPnl: a.manualRealizedPnl ?? 0,
       manualConfirmedDividends: a.manualConfirmedDividends ?? 0,
     }));

@@ -1,6 +1,20 @@
-import { Dividend, Holding, Quote, Transaction } from "./types";
+import { Account, Dividend, Holding, Quote, Transaction } from "./types";
 import { YearlyReturnOverrides } from "./storage";
 import { convertFromKRW, convertToKRW } from "./fx";
+
+/**
+ * An account's 계좌투입금 (cumulative capital ever deposited): once the
+ * account has a dated deposit log, that log is the source of truth (so
+ * continuous, ongoing contributions are just another logged entry rather
+ * than a number the user has to remember to bump by hand); otherwise falls
+ * back to the plain manually-edited `totalDeposited` field.
+ */
+export function effectiveTotalDeposited(account: Account): number {
+  if (account.deposits && account.deposits.length > 0) {
+    return account.deposits.reduce((sum, d) => sum + d.amount, 0);
+  }
+  return account.totalDeposited;
+}
 
 export interface HoldingPosition {
   quantity: number;

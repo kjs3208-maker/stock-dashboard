@@ -1,9 +1,21 @@
+export interface AccountDeposit {
+  id: string;
+  date: string; // ISO date
+  amount: number;
+  note?: string;
+}
+
 export interface Account {
   id: string;
   name: string; // e.g. "키움증권-일반", "연금저축"
   currency: string; // currency the cash balance is held in
   cashBalance: number; // 예수금 - cash currently sitting in the account
-  totalDeposited: number; // 계좌투입금 - cumulative capital ever put into the account
+  totalDeposited: number; // 계좌투입금 - cumulative capital ever put into the account.
+  // Manually edited when `deposits` is empty; once `deposits` has entries,
+  // this becomes derived (their sum) instead - see effectiveTotalDeposited().
+  deposits?: AccountDeposit[]; // dated log of individual deposits, for
+  // accounts that receive contributions continuously over time rather than
+  // as a single lump sum
   manualRealizedPnl?: number; // 실현손익 일괄 입력 - a lump sum for gains/losses already
   // realized on trades whose individual buy/sell transactions were never
   // entered per holding; added on top of any per-holding realized P&L

@@ -13,6 +13,7 @@ import {
 } from "@/lib/types";
 import {
   BackupData,
+  createAccountDepositId,
   createDividendId,
   createHoldingId,
   createResearchNoteId,
@@ -47,6 +48,7 @@ import {
   applyYearlyOverrides,
   computeHoldingMetrics,
   computeYearlyReturns,
+  effectiveTotalDeposited,
   estimateForeignCapitalGainsTax,
   getEffectiveQuote,
 } from "@/lib/portfolioMath";
@@ -70,6 +72,7 @@ import { TaxEstimatePanel } from "@/components/TaxEstimatePanel";
 import { ResearchNotesPanel } from "@/components/ResearchNotesPanel";
 import { InsightCollector } from "@/components/InsightCollector";
 import { ReportUploadPanel } from "@/components/ReportUploadPanel";
+import { AccountDepositsPanel } from "@/components/AccountDepositsPanel";
 
 const DISPLAY_CURRENCY = "KRW";
 const ALL_ACCOUNTS = "all";
@@ -357,7 +360,7 @@ export default function DashboardPage() {
   const depositedTotal = useMemo(
     () =>
       relevantAccounts.reduce(
-        (sum, a) => sum + convertToKRW(a.totalDeposited, a.currency, fxRates),
+        (sum, a) => sum + convertToKRW(effectiveTotalDeposited(a), a.currency, fxRates),
         0
       ),
     [relevantAccounts, fxRates]
@@ -686,7 +689,32 @@ export default function DashboardPage() {
     setResearchNotes((prev) => prev.filter((n) => n.id !== id));
   }
 
+  function handleAddAccountDeposit(
+    accountId: string,
+    deposit: { date: string; amount: number; note?: string }
+  ) {
+    setAccounts((prev) =>
+      prev.map((a) =>
+        a.id === accountId
+          ? { ...a, deposits: [...(a.deposits ?? []), { id: createAccountDepositId(), ...deposit }] }
+          : a
+      )
+    );
+  }
+
+  function handleDeleteAccountDeposit(accountId: string, depositId: string) {
+    setAccounts((prev) =>
+      prev.map((a) =>
+        a.id === accountId
+          ? { ...a, deposits: (a.deposits ?? []).filter((d) => d.id !== depositId) }
+          : a
+      )
+    );
+  }
+
   const selectedHolding = holdings.find((h) => h.symbol === selectedSymbol) ?? null;
+  const selectedAccount =
+    selectedAccountId === ALL_ACCOUNTS ? null : accounts.find((a) => a.id === selectedAccountId) ?? null;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -745,6 +773,19 @@ export default function DashboardPage() {
             </select>
           </label>
         </div>
+      )}
+
+      {selectedAccount && (
+        <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
+          <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+            {selectedAccount.name} 입금 내역
+          </h2>
+          <AccountDepositsPanel
+            account={selectedAccount}
+            onAdd={(d) => handleAddAccountDeposit(selectedAccount.id, d)}
+            onDelete={(depositId) => handleDeleteAccountDeposit(selectedAccount.id, depositId)}
+          />
+        </section>
       )}
 
       {fxIsMock && filteredHoldings.length > 0 && (
