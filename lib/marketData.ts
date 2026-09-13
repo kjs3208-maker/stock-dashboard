@@ -60,3 +60,71 @@ export async function fetchAnalysis(symbol: string, name: string): Promise<Analy
   }
   return data;
 }
+
+export interface InsightNewsItem {
+  title: string;
+  description?: string;
+  url: string;
+  source: string;
+  publishedAt: string;
+}
+
+export interface InsightDisclosure {
+  title: string;
+  reportedAt: string;
+  url: string;
+  submitter: string;
+}
+
+export interface InsightsResult {
+  symbol?: string;
+  name?: string;
+  disclosures?: InsightDisclosure[];
+  dartConfigured?: boolean;
+  naverConfigured?: boolean;
+  news?: InsightNewsItem[];
+  newsSource?: "naver" | "yahoo" | "mock";
+  insight?: string;
+  error?: string;
+}
+
+export async function fetchInsights(
+  symbol: string,
+  name: string,
+  stockCode?: string
+): Promise<InsightsResult> {
+  const res = await fetch("/api/insights", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ symbol, name, stockCode }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    return { error: data?.error ?? `인사이트 수집 실패 (${res.status})` };
+  }
+  return data;
+}
+
+export interface ReportAnalysisResult {
+  insight?: string;
+  textLength?: number;
+  fileName?: string;
+  error?: string;
+}
+
+export async function fetchReportAnalysis(
+  file: File,
+  symbol?: string,
+  name?: string
+): Promise<ReportAnalysisResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (symbol) formData.append("symbol", symbol);
+  if (name) formData.append("name", name);
+  const res = await fetch("/api/report-analysis", { method: "POST", body: formData });
+  const data = await res.json();
+  if (!res.ok) {
+    return { error: data?.error ?? `분석 요청 실패 (${res.status})` };
+  }
+  return data;
+}

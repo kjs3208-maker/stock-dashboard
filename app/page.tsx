@@ -68,6 +68,8 @@ import { AnalysisModal } from "@/components/AnalysisModal";
 import { BackupControls } from "@/components/BackupControls";
 import { TaxEstimatePanel } from "@/components/TaxEstimatePanel";
 import { ResearchNotesPanel } from "@/components/ResearchNotesPanel";
+import { InsightCollector } from "@/components/InsightCollector";
+import { ReportUploadPanel } from "@/components/ReportUploadPanel";
 
 const DISPLAY_CURRENCY = "KRW";
 const ALL_ACCOUNTS = "all";
@@ -851,6 +853,28 @@ export default function DashboardPage() {
           onDelete={handleDeleteWatchlistItem}
           onConvert={handleConvertWatchlistItem}
           onAnalyze={setAnalysisTarget}
+        />
+      </section>
+
+      <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
+        <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+          키워드 인사이트 수집
+        </h2>
+        <InsightCollector
+          onSaveAsNote={(note) =>
+            handleAddResearchNote({ ...note, category: "인사이트" })
+          }
+        />
+      </section>
+
+      <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
+        <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+          리포트 분석 (PDF 업로드)
+        </h2>
+        <ReportUploadPanel
+          onSaveAsNote={(note) =>
+            handleAddResearchNote({ ...note, category: "종목분석" })
+          }
         />
       </section>
 
