@@ -12,6 +12,7 @@ export interface HoldingFormValues {
   manualPrice?: number;
   note?: string;
   targetWeightPercent?: number;
+  sector?: string;
   // Only present when creating a brand new holding - its first buy.
   initialTransaction?: { quantity: number; price: number; date: string };
 }
@@ -60,6 +61,7 @@ export function HoldingFormModal({
   const [targetWeightPercent, setTargetWeightPercent] = useState(
     initial?.targetWeightPercent != null ? String(initial.targetWeightPercent) : ""
   );
+  const [sector, setSector] = useState(initial?.sector ?? "");
   const [error, setError] = useState<string | null>(null);
 
   if (!open) return null;
@@ -118,6 +120,7 @@ export function HoldingFormModal({
       manualPrice: manualPriceValue,
       note: trimmedNote || undefined,
       targetWeightPercent: targetWeightValue,
+      sector: sector.trim() || undefined,
       initialTransaction,
     });
   }
@@ -249,6 +252,18 @@ export function HoldingFormModal({
               rows={2}
               placeholder="예: 실적 개선 기대, 장기 보유 목적"
               className="rounded border border-line-hairline bg-transparent px-3 py-2 text-sm dark:border-line-hairline-dark"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-ink-secondary dark:text-ink-secondary-dark">
+              섹터/테마 (집중도 경고용, 선택)
+            </span>
+            <input
+              value={sector}
+              onChange={(e) => setSector(e.target.value)}
+              placeholder="예: 반도체, 전력인프라, 화장품"
+              className="rounded border border-line-hairline bg-transparent px-3 py-2 dark:border-line-hairline-dark"
             />
           </label>
 

@@ -7,18 +7,23 @@ import {
   findGoalCrossingYear,
   netWorthAssetNetValue,
   projectNetWorth,
+  resolveNetWorthAssetGrossValue,
   sumNetWorthAssets,
 } from "@/lib/portfolioMath";
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 
 interface NetWorthGoalPanelProps {
   stockTotalAssets: number; // this dashboard's own tracked total (주식+예수금), KRW
   assets: NetWorthAsset[];
   goal: NetWorthGoalSettings;
+  rsuLivePrice?: number | null; // current price of the RSU-granting stock, if held/tracked here
+  rsuSymbolLabel?: string; // e.g. "005930.KS" - shown as a hint for quantity-linked RSU rows
   onAddAsset: (asset: {
     category: NetWorthAssetCategory;
     name: string;
     grossValue: number;
+    rsuQuantity?: number;
+    vestDate?: string;
     taxRatePercent: number;
     note?: string;
   }) => void;
@@ -83,6 +88,8 @@ export function NetWorthGoalPanel({
   stockTotalAssets,
   assets,
   goal,
+  rsuLivePrice = null,
+  rsuSymbolLabel,
   onAddAsset,
   onDeleteAsset,
   onUpdateGoal,
@@ -91,11 +98,16 @@ export function NetWorthGoalPanel({
     category: "부동산" as NetWorthAssetCategory,
     name: "",
     grossValue: "",
+    rsuQuantity: "",
+    vestDate: "",
     taxRatePercent: "0",
     note: "",
   });
 
-  const otherAssetsTotal = useMemo(() => sumNetWorthAssets(assets), [assets]);
+  const otherAssetsTotal = useMemo(
+    () => sumNetWorthAssets(assets, rsuLivePrice),
+    [assets, rsuLivePrice]
+  );
   const totalNetWorth = stockTotalAssets + otherAssetsTotal;
 
   const projection = useMemo(
@@ -115,26 +127,43 @@ export function NetWorthGoalPanel({
     const byCategory = new Map<string, number>();
     byCategory.set("주식(대시보드)", stockTotalAssets);
     for (const asset of assets) {
-      const net = netWorthAssetNetValue(asset);
+      const net = netWorthAssetNetValue(asset, rsuLivePrice);
       byCategory.set(asset.category, (byCategory.get(asset.category) ?? 0) + net);
     }
     return [...byCategory.entries()]
       .filter(([, value]) => value > 0)
       .map(([name, value]) => ({ name, value }));
-  }, [assets, stockTotalAssets]);
+  }, [assets, stockTotalAssets, rsuLivePrice]);
 
   function handleAdd() {
-    const grossValue = Number(form.grossValue);
+    const isRsuQuantityMode = form.category === "RSU" && form.rsuQuantity.trim() !== "";
+    const rsuQuantity = isRsuQuantityMode ? Number(form.rsuQuantity) : undefined;
+    const grossValue = Number(form.grossValue || "0");
     const taxRatePercent = Number(form.taxRatePercent);
-    if (!form.name.trim() || !Number.isFinite(grossValue) || grossValue <= 0) return;
+    if (!form.name.trim()) return;
+    if (isRsuQuantityMode) {
+      if (!Number.isFinite(rsuQuantity) || (rsuQuantity as number) <= 0) return;
+    } else if (!Number.isFinite(grossValue) || grossValue <= 0) {
+      return;
+    }
     onAddAsset({
       category: form.category,
       name: form.name.trim(),
       grossValue,
+      rsuQuantity,
+      vestDate: form.vestDate || undefined,
       taxRatePercent: Number.isFinite(taxRatePercent) ? taxRatePercent : 0,
       note: form.note.trim() || undefined,
     });
-    setForm({ category: form.category, name: "", grossValue: "", taxRatePercent: "0", note: "" });
+    setForm({
+      category: form.category,
+      name: "",
+      grossValue: "",
+      rsuQuantity: "",
+      vestDate: "",
+      taxRatePercent: "0",
+      note: "",
+    });
   }
 
   return (
@@ -277,15 +306,31 @@ export function NetWorthGoalPanel({
                     [{a.category}] {a.name}
                   </div>
                   <div className="text-xs tabular-nums text-ink-muted">
-                    세전 {formatCurrency(a.grossValue, "KRW")}
+                    {a.rsuQuantity != null ? (
+                      <>
+                        {a.rsuQuantity.toLocaleString()}주
+                        {rsuLivePrice != null ? (
+                          <> × 현재가 {formatCurrency(rsuLivePrice, "KRW")} (실시간 연동)</>
+                        ) : (
+                          <> · 현재가 연동 안 됨 - 직접 입력값 사용 중</>
+                        )}{" "}
+                        = 세전 {formatCurrency(resolveNetWorthAssetGrossValue(a, rsuLivePrice), "KRW")}
+                      </>
+                    ) : (
+                      <>세전 {formatCurrency(a.grossValue, "KRW")}</>
+                    )}
                     {a.taxRatePercent > 0 && (
                       <>
                         {" "}
                         · 세율 {a.taxRatePercent}% · 세후{" "}
-                        {formatCurrency(netWorthAssetNetValue(a), "KRW")}
+                        {formatCurrency(netWorthAssetNetValue(a, rsuLivePrice), "KRW")}
                       </>
                     )}
+                    {a.vestDate && <> · 베스팅/지급 예정일 {formatDate(a.vestDate)}</>}
                     {a.note && <> · {a.note}</>}
+                  </div>
+                  <div className="mt-0.5 text-xs text-ink-muted">
+                    최근 수정 {formatDate(a.updatedAt)}
                   </div>
                 </div>
                 <button
@@ -318,13 +363,23 @@ export function NetWorthGoalPanel({
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               className="rounded border border-line-hairline bg-transparent px-2 py-1.5 dark:border-line-hairline-dark"
             />
-            <input
-              type="number"
-              placeholder="세전 금액(원)"
-              value={form.grossValue}
-              onChange={(e) => setForm((f) => ({ ...f, grossValue: e.target.value }))}
-              className="rounded border border-line-hairline bg-transparent px-2 py-1.5 tabular-nums dark:border-line-hairline-dark"
-            />
+            {form.category === "RSU" ? (
+              <input
+                type="number"
+                placeholder={`수량${rsuSymbolLabel ? ` (${rsuSymbolLabel})` : ""}`}
+                value={form.rsuQuantity}
+                onChange={(e) => setForm((f) => ({ ...f, rsuQuantity: e.target.value }))}
+                className="rounded border border-line-hairline bg-transparent px-2 py-1.5 tabular-nums dark:border-line-hairline-dark"
+              />
+            ) : (
+              <input
+                type="number"
+                placeholder="세전 금액(원)"
+                value={form.grossValue}
+                onChange={(e) => setForm((f) => ({ ...f, grossValue: e.target.value }))}
+                className="rounded border border-line-hairline bg-transparent px-2 py-1.5 tabular-nums dark:border-line-hairline-dark"
+              />
+            )}
             <input
               type="number"
               placeholder="세율(%)"
@@ -338,8 +393,30 @@ export function NetWorthGoalPanel({
             >
               + 추가
             </button>
+            {(form.category === "RSU" || form.category === "성과급(OPI)") && (
+              <label className="col-span-2 flex flex-col gap-1 sm:col-span-5">
+                <span className="text-ink-muted">베스팅/지급 예정일 (선택)</span>
+                <input
+                  type="date"
+                  value={form.vestDate}
+                  onChange={(e) => setForm((f) => ({ ...f, vestDate: e.target.value }))}
+                  className="rounded border border-line-hairline bg-transparent px-2 py-1.5 dark:border-line-hairline-dark"
+                />
+              </label>
+            )}
+            {form.category === "RSU" && (
+              <input
+                type="number"
+                placeholder="수량 입력 안 할 경우 세전 금액(원) 직접 입력"
+                value={form.grossValue}
+                onChange={(e) => setForm((f) => ({ ...f, grossValue: e.target.value }))}
+                className="col-span-2 rounded border border-line-hairline bg-transparent px-2 py-1.5 tabular-nums dark:border-line-hairline-dark sm:col-span-5"
+              />
+            )}
           </div>
           <p className="mt-1 text-xs text-ink-muted">
+            RSU는 수량을 입력하면 {rsuSymbolLabel ? `${rsuSymbolLabel}의 ` : ""}현재가와 실시간
+            연동되어 평가액이 자동 갱신됩니다 (시세 연동이 안 되면 직접 입력한 금액을 씁니다).
             RSU·성과급(OPI)은 세율에 예상 근로소득세 한계세율(예: 41.8, 49.5)을 입력하면 세후
             금액이 자동 반영됩니다. 부동산·현금성은 보통 0으로 두면 됩니다.
           </p>

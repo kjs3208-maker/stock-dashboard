@@ -1,7 +1,7 @@
 "use client";
 
 import { Holding, Quote } from "@/lib/types";
-import { formatCurrency, formatNumber, formatPercent } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatPercent } from "@/lib/format";
 
 export interface HoldingRow {
   holding: Holding;
@@ -111,7 +111,17 @@ export function HoldingsTable({
                         MOCK
                       </span>
                     )}
+                    {holding.sector && (
+                      <span className="rounded bg-series-3/15 px-1 text-series-3">
+                        {holding.sector}
+                      </span>
+                    )}
                   </div>
+                  {holding.updatedAt && (
+                    <div className="mt-0.5 text-xs text-ink-muted">
+                      최근 수정 {formatDate(holding.updatedAt)}
+                    </div>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">
                   {formatNumber(quantity, 0)}

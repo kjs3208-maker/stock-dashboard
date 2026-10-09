@@ -376,14 +376,58 @@ export function estimateForeignCapitalGainsTax(
   };
 }
 
-/** Net-of-tax value of a single net-worth asset (부동산/RSU/OPI/현금성/기타). */
-export function netWorthAssetNetValue(asset: NetWorthAsset): number {
-  const rate = Math.min(100, Math.max(0, asset.taxRatePercent)) / 100;
-  return asset.grossValue * (1 - rate);
+/**
+ * RSU entries may carry a share count instead of (or alongside) a flat
+ * value. When a live price for that stock is available, quantity × price
+ * is used so the RSU's worth tracks the market instead of going stale the
+ * moment it's entered; otherwise the manually-entered grossValue is used.
+ */
+export function resolveNetWorthAssetGrossValue(
+  asset: NetWorthAsset,
+  livePrice: number | null = null
+): number {
+  if (asset.category === "RSU" && asset.rsuQuantity != null && livePrice != null) {
+    return asset.rsuQuantity * livePrice;
+  }
+  return asset.grossValue;
 }
 
-export function sumNetWorthAssets(assets: NetWorthAsset[]): number {
-  return assets.reduce((sum, a) => sum + netWorthAssetNetValue(a), 0);
+/** Net-of-tax value of a single net-worth asset (부동산/RSU/OPI/현금성/기타). */
+export function netWorthAssetNetValue(asset: NetWorthAsset, livePrice: number | null = null): number {
+  const gross = resolveNetWorthAssetGrossValue(asset, livePrice);
+  const rate = Math.min(100, Math.max(0, asset.taxRatePercent)) / 100;
+  return gross * (1 - rate);
+}
+
+export function sumNetWorthAssets(assets: NetWorthAsset[], livePrice: number | null = null): number {
+  return assets.reduce((sum, a) => sum + netWorthAssetNetValue(a, livePrice), 0);
+}
+
+export interface SectorExposure {
+  sector: string;
+  valueInBase: number;
+  percent: number;
+}
+
+/** Aggregates holding market values by their (optional) sector tag, for a
+ * concentration-risk warning. Holdings without a sector tag are ignored. */
+export function computeSectorExposure(
+  items: { sector?: string; valueInBase: number }[]
+): SectorExposure[] {
+  const total = items.reduce((sum, i) => sum + i.valueInBase, 0);
+  const bySector = new Map<string, number>();
+  for (const item of items) {
+    const sector = item.sector?.trim();
+    if (!sector) continue;
+    bySector.set(sector, (bySector.get(sector) ?? 0) + item.valueInBase);
+  }
+  return [...bySector.entries()]
+    .map(([sector, valueInBase]) => ({
+      sector,
+      valueInBase,
+      percent: total > 0 ? (valueInBase / total) * 100 : 0,
+    }))
+    .sort((a, b) => b.valueInBase - a.valueInBase);
 }
 
 export interface NetWorthProjectionPoint {

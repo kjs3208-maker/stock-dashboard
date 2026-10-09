@@ -2,6 +2,7 @@ import {
   Account,
   AccountDeposit,
   Dividend,
+  EmergencyFundSettings,
   Holding,
   NetWorthAsset,
   NetWorthGoalSettings,
@@ -18,6 +19,7 @@ const WATCHLIST_KEY = "stock-dashboard.watchlist.v1";
 const RESEARCH_NOTES_KEY = "stock-dashboard.researchNotes.v1";
 const NET_WORTH_ASSETS_KEY = "stock-dashboard.netWorthAssets.v1";
 const NET_WORTH_GOAL_KEY = "stock-dashboard.netWorthGoal.v1";
+const EMERGENCY_FUND_KEY = "stock-dashboard.emergencyFund.v1";
 
 export const DEFAULT_NET_WORTH_GOAL: NetWorthGoalSettings = {
   totalTargetAmount: 10_000_000_000,
@@ -25,6 +27,11 @@ export const DEFAULT_NET_WORTH_GOAL: NetWorthGoalSettings = {
   assumedAnnualReturnPercent: 15,
   assumedAnnualStockContribution: 40_000_000,
   otherAssetAnnualGrowthPercent: 4,
+};
+
+export const DEFAULT_EMERGENCY_FUND: EmergencyFundSettings = {
+  monthlyEssentialExpense: 0,
+  targetMonths: 6,
 };
 
 function isBrowser(): boolean {
@@ -95,6 +102,8 @@ interface LegacyHolding {
   accountId?: string;
   note?: string;
   targetWeightPercent?: number;
+  sector?: string;
+  updatedAt?: string;
   transactions?: Transaction[];
   dividends?: LegacyDividend[];
 }
@@ -117,6 +126,8 @@ function migrateHolding(raw: LegacyHolding): Holding {
       manualPrice: raw.manualPrice,
       note: raw.note,
       targetWeightPercent: raw.targetWeightPercent,
+      sector: raw.sector,
+      updatedAt: raw.updatedAt,
       transactions: raw.transactions,
       dividends,
     };
@@ -142,6 +153,8 @@ function migrateHolding(raw: LegacyHolding): Holding {
     manualPrice: raw.manualPrice,
     note: raw.note,
     targetWeightPercent: raw.targetWeightPercent,
+    sector: raw.sector,
+    updatedAt: raw.updatedAt,
     transactions,
     dividends,
   };
@@ -348,6 +361,28 @@ export function saveNetWorthGoal(goal: NetWorthGoalSettings): void {
   }
 }
 
+export function loadEmergencyFund(): EmergencyFundSettings {
+  if (!isBrowser()) return DEFAULT_EMERGENCY_FUND;
+  try {
+    const raw = window.localStorage.getItem(EMERGENCY_FUND_KEY);
+    if (!raw) return DEFAULT_EMERGENCY_FUND;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return DEFAULT_EMERGENCY_FUND;
+    return { ...DEFAULT_EMERGENCY_FUND, ...(parsed as Partial<EmergencyFundSettings>) };
+  } catch {
+    return DEFAULT_EMERGENCY_FUND;
+  }
+}
+
+export function saveEmergencyFund(settings: EmergencyFundSettings): void {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.setItem(EMERGENCY_FUND_KEY, JSON.stringify(settings));
+  } catch {
+    // ignore
+  }
+}
+
 export interface BackupData {
   version: 1;
   exportedAt: string;
@@ -359,6 +394,7 @@ export interface BackupData {
   researchNotes?: ResearchNote[];
   netWorthAssets?: NetWorthAsset[];
   netWorthGoal?: NetWorthGoalSettings;
+  emergencyFund?: EmergencyFundSettings;
 }
 
 export function exportBackup(): BackupData {
@@ -373,6 +409,7 @@ export function exportBackup(): BackupData {
     researchNotes: loadResearchNotes(),
     netWorthAssets: loadNetWorthAssets(),
     netWorthGoal: loadNetWorthGoal(),
+    emergencyFund: loadEmergencyFund(),
   };
 }
 
@@ -385,4 +422,5 @@ export function importBackup(data: BackupData): void {
   if (Array.isArray(data.researchNotes)) saveResearchNotes(data.researchNotes);
   if (Array.isArray(data.netWorthAssets)) saveNetWorthAssets(data.netWorthAssets);
   if (data.netWorthGoal) saveNetWorthGoal(data.netWorthGoal);
+  if (data.emergencyFund) saveEmergencyFund(data.emergencyFund);
 }

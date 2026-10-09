@@ -58,6 +58,9 @@ export interface Holding {
   dividends: Dividend[];
   note?: string; // free-text - why bought, thesis, reminders
   targetWeightPercent?: number; // desired allocation share, for rebalancing suggestions
+  sector?: string; // free-text sector/theme tag (e.g. "반도체"), for concentration warnings
+  updatedAt?: string; // ISO date - bumped whenever the holding or its transactions change,
+  // so the holdings table can show "최근 수정일" before the user re-enters something
 }
 
 export interface WatchlistItem {
@@ -105,7 +108,11 @@ export interface NetWorthAsset {
   id: string;
   category: NetWorthAssetCategory;
   name: string; // e.g. "자가주택", "전세보증금", "삼성전자 RSU"
-  grossValue: number; // 세전 평가액/예정액, KRW
+  grossValue: number; // 세전 평가액/예정액, KRW - ignored when rsuQuantity is set and a live
+  // price is available (see resolveNetWorthAssetGrossValue)
+  rsuQuantity?: number; // RSU 전용(선택): 보유/예정 수량. 설정하면 평가액을 현재가 × 수량으로
+  // 실시간 계산한다 (연동할 종목 시세가 없으면 grossValue로 대체)
+  vestDate?: string; // RSU/OPI 전용(선택): 베스팅/지급 예정일, 참고 표시용
   taxRatePercent: number; // 적용 세율(%) - RSU/OPI는 근로소득세 한계세율, 그 외는 보통 0
   note?: string;
   updatedAt: string; // ISO date
@@ -117,6 +124,11 @@ export interface NetWorthGoalSettings {
   assumedAnnualReturnPercent: number; // 주식 포트폴리오 가정 연수익률(%)
   assumedAnnualStockContribution: number; // 주식 계좌 연간 추가납입 가정액 (KRW)
   otherAssetAnnualGrowthPercent: number; // 주식 외 자산(부동산 등) 가정 연성장률(%)
+}
+
+export interface EmergencyFundSettings {
+  monthlyEssentialExpense: number; // 월 필수 생활비 (KRW)
+  targetMonths: number; // 목표 개월수 (예: 6)
 }
 
 export type ResearchNoteCategory = "종목분석" | "인사이트" | "일반";

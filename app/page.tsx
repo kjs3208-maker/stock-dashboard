@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Account,
+  EmergencyFundSettings,
   Holding,
   HistoryPoint,
   NetWorthAsset,
@@ -23,9 +24,11 @@ import {
   createResearchNoteId,
   createTransactionId,
   createWatchlistId,
+  DEFAULT_EMERGENCY_FUND,
   DEFAULT_NET_WORTH_GOAL,
   importBackup,
   loadAccounts,
+  loadEmergencyFund,
   loadHoldings,
   loadNetWorthAssets,
   loadNetWorthGoal,
@@ -34,6 +37,7 @@ import {
   loadWatchlist,
   loadYearlyReturnOverrides,
   saveAccounts,
+  saveEmergencyFund,
   saveHoldings,
   saveNetWorthAssets,
   saveNetWorthGoal,
@@ -56,11 +60,13 @@ import {
 import {
   applyYearlyOverrides,
   computeHoldingMetrics,
+  computeSectorExposure,
   computeYearlyPrincipal,
   computeYearlyReturns,
   effectiveTotalDeposited,
   estimateForeignCapitalGainsTax,
   getEffectiveQuote,
+  netWorthAssetNetValue,
 } from "@/lib/portfolioMath";
 import { SummaryCards } from "@/components/SummaryCards";
 import { HoldingsTable, HoldingRow } from "@/components/HoldingsTable";
@@ -85,6 +91,8 @@ import { InsightCollector } from "@/components/InsightCollector";
 import { ReportUploadPanel } from "@/components/ReportUploadPanel";
 import { AccountDepositsPanel } from "@/components/AccountDepositsPanel";
 import { NetWorthGoalPanel } from "@/components/NetWorthGoalPanel";
+import { SectorConcentrationCard } from "@/components/SectorConcentrationCard";
+import { EmergencyFundCard } from "@/components/EmergencyFundCard";
 
 const DISPLAY_CURRENCY = "KRW";
 const ALL_ACCOUNTS = "all";
@@ -121,6 +129,7 @@ export default function DashboardPage() {
   const [researchNotes, setResearchNotes] = useState<ResearchNote[]>([]);
   const [netWorthAssets, setNetWorthAssets] = useState<NetWorthAsset[]>([]);
   const [netWorthGoal, setNetWorthGoal] = useState<NetWorthGoalSettings>(DEFAULT_NET_WORTH_GOAL);
+  const [emergencyFund, setEmergencyFund] = useState<EmergencyFundSettings>(DEFAULT_EMERGENCY_FUND);
 
   // Fetch exchange rates once - used to combine holdings/accounts that
   // aren't all in the same currency into one meaningful total.
@@ -154,6 +163,7 @@ export default function DashboardPage() {
     setResearchNotes(loadResearchNotes());
     setNetWorthAssets(loadNetWorthAssets());
     setNetWorthGoal(loadNetWorthGoal());
+    setEmergencyFund(loadEmergencyFund());
     /* eslint-enable react-hooks/set-state-in-effect */
     setHydrated(true);
   }, []);
@@ -182,6 +192,9 @@ export default function DashboardPage() {
   useEffect(() => {
     if (hydrated) saveNetWorthGoal(netWorthGoal);
   }, [netWorthGoal, hydrated]);
+  useEffect(() => {
+    if (hydrated) saveEmergencyFund(emergencyFund);
+  }, [emergencyFund, hydrated]);
 
   // Once local state is loaded, see if server-side sync (Upstash + a shared
   // passcode) is configured at all. If it is and this device already knows
@@ -203,6 +216,7 @@ export default function DashboardPage() {
           setResearchNotes(result.payload.data.researchNotes ?? []);
           setNetWorthAssets(result.payload.data.netWorthAssets ?? []);
           setNetWorthGoal(result.payload.data.netWorthGoal ?? DEFAULT_NET_WORTH_GOAL);
+          setEmergencyFund(result.payload.data.emergencyFund ?? DEFAULT_EMERGENCY_FUND);
           setLastSyncedAt(result.payload.updatedAt);
         }
       }
@@ -229,6 +243,7 @@ export default function DashboardPage() {
       researchNotes,
       netWorthAssets,
       netWorthGoal,
+      emergencyFund,
     };
     const timeout = setTimeout(() => {
       pushRemoteState(passcode, data).then((ok) => {
@@ -245,6 +260,7 @@ export default function DashboardPage() {
     researchNotes,
     netWorthAssets,
     netWorthGoal,
+    emergencyFund,
     hydrated,
     syncStatus,
   ]);
@@ -268,6 +284,7 @@ export default function DashboardPage() {
         setResearchNotes(result.payload.data.researchNotes ?? []);
         setNetWorthAssets(result.payload.data.netWorthAssets ?? []);
         setNetWorthGoal(result.payload.data.netWorthGoal ?? DEFAULT_NET_WORTH_GOAL);
+        setEmergencyFund(result.payload.data.emergencyFund ?? DEFAULT_EMERGENCY_FUND);
         setLastSyncedAt(result.payload.updatedAt);
       } else {
         const data: BackupData = {
@@ -281,6 +298,7 @@ export default function DashboardPage() {
           researchNotes,
           netWorthAssets,
           netWorthGoal,
+          emergencyFund,
         };
         pushRemoteState(passcode, data).then((ok) => {
           if (ok) setLastSyncedAt(data.exportedAt);
@@ -520,6 +538,30 @@ export default function DashboardPage() {
     [rows, fxRates]
   );
 
+  const sectorExposures = useMemo(
+    () =>
+      computeSectorExposure(
+        rows
+          .filter((r) => r.marketValue > 0)
+          .map((r) => ({
+            sector: r.holding.sector,
+            valueInBase: convertToKRW(r.marketValue, r.holding.currency, fxRates),
+          }))
+      ),
+    [rows, fxRates]
+  );
+
+  // 삼성전자(005930.KS) live quote, if this dashboard happens to track it as a
+  // holding/watchlist item - used to keep quantity-linked RSU entries current.
+  const samsungLivePrice = quotes["005930.KS"]?.price ?? null;
+
+  const cashLikeTotal = useMemo(() => {
+    const netWorthCashLike = netWorthAssets
+      .filter((a) => a.category === "현금성")
+      .reduce((sum, a) => sum + netWorthAssetNetValue(a, samsungLivePrice), 0);
+    return cashTotal + netWorthCashLike;
+  }, [netWorthAssets, cashTotal, samsungLivePrice]);
+
   const rebalanceSuggestions = useMemo(() => {
     const totalValueInBase = rows.reduce(
       (sum, r) => sum + convertToKRW(r.marketValue, r.holding.currency, fxRates),
@@ -549,6 +591,7 @@ export default function DashboardPage() {
   }, [rows, fxRates]);
 
   function handleSave(values: HoldingFormValues) {
+    const now = new Date().toISOString();
     setHoldings((prev) => {
       if (values.id) {
         return prev.map((h) =>
@@ -561,6 +604,8 @@ export default function DashboardPage() {
                 manualPrice: values.manualPrice,
                 note: values.note,
                 targetWeightPercent: values.targetWeightPercent,
+                sector: values.sector,
+                updatedAt: now,
               }
             : h
         );
@@ -579,8 +624,10 @@ export default function DashboardPage() {
           manualPrice: values.manualPrice,
           note: values.note,
           targetWeightPercent: values.targetWeightPercent,
+          sector: values.sector,
           transactions,
           dividends: [],
+          updatedAt: now,
         },
       ];
     });
@@ -621,7 +668,11 @@ export default function DashboardPage() {
     setHoldings((prev) =>
       prev.map((h) =>
         h.id === holdingId
-          ? { ...h, transactions: [...h.transactions, { ...transaction, id: createTransactionId() }] }
+          ? {
+              ...h,
+              transactions: [...h.transactions, { ...transaction, id: createTransactionId() }],
+              updatedAt: new Date().toISOString(),
+            }
           : h
       )
     );
@@ -631,7 +682,11 @@ export default function DashboardPage() {
     setHoldings((prev) =>
       prev.map((h) =>
         h.id === holdingId
-          ? { ...h, transactions: h.transactions.filter((t) => t.id !== transactionId) }
+          ? {
+              ...h,
+              transactions: h.transactions.filter((t) => t.id !== transactionId),
+              updatedAt: new Date().toISOString(),
+            }
           : h
       )
     );
@@ -700,12 +755,15 @@ export default function DashboardPage() {
     setResearchNotes(data.researchNotes ?? []);
     setNetWorthAssets(data.netWorthAssets ?? []);
     setNetWorthGoal(data.netWorthGoal ?? DEFAULT_NET_WORTH_GOAL);
+    setEmergencyFund(data.emergencyFund ?? DEFAULT_EMERGENCY_FUND);
   }
 
   function handleAddNetWorthAsset(asset: {
     category: NetWorthAssetCategory;
     name: string;
     grossValue: number;
+    rsuQuantity?: number;
+    vestDate?: string;
     taxRatePercent: number;
     note?: string;
   }) {
@@ -721,6 +779,10 @@ export default function DashboardPage() {
 
   function handleUpdateNetWorthGoal(patch: Partial<NetWorthGoalSettings>) {
     setNetWorthGoal((prev) => ({ ...prev, ...patch }));
+  }
+
+  function handleUpdateEmergencyFund(patch: Partial<EmergencyFundSettings>) {
+    setEmergencyFund((prev) => ({ ...prev, ...patch }));
   }
 
   function handleAddResearchNote(note: {
@@ -934,9 +996,22 @@ export default function DashboardPage() {
           stockTotalAssets={summary.totalStockValue + cashTotal}
           assets={netWorthAssets}
           goal={netWorthGoal}
+          rsuLivePrice={samsungLivePrice}
+          rsuSymbolLabel="삼성전자 005930.KS"
           onAddAsset={handleAddNetWorthAsset}
           onDeleteAsset={handleDeleteNetWorthAsset}
           onUpdateGoal={handleUpdateNetWorthGoal}
+        />
+      </section>
+
+      <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
+        <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+          비상자금 트래커
+        </h2>
+        <EmergencyFundCard
+          settings={emergencyFund}
+          cashLikeTotal={cashLikeTotal}
+          onUpdate={handleUpdateEmergencyFund}
         />
       </section>
 
@@ -1045,6 +1120,17 @@ export default function DashboardPage() {
             리밸런싱 제안
           </h2>
           <RebalancePanel suggestions={rebalanceSuggestions} />
+        </section>
+
+        <section className="rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark lg:col-span-2">
+          <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+            섹터 집중도
+          </h2>
+          <SectorConcentrationCard
+            exposures={sectorExposures}
+            warnThresholdPercent={20}
+            currency={DISPLAY_CURRENCY}
+          />
         </section>
       </div>
 
