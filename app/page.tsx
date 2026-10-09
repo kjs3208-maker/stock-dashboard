@@ -63,7 +63,6 @@ import {
   computeSectorExposure,
   computeYearlyPrincipal,
   computeYearlyReturns,
-  effectiveTotalDeposited,
   estimateForeignCapitalGainsTax,
   getEffectiveQuote,
   netWorthAssetNetValue,
@@ -407,15 +406,6 @@ export default function DashboardPage() {
     [relevantAccounts, fxRates]
   );
 
-  const depositedTotal = useMemo(
-    () =>
-      relevantAccounts.reduce(
-        (sum, a) => sum + convertToKRW(effectiveTotalDeposited(a), a.currency, fxRates),
-        0
-      ),
-    [relevantAccounts, fxRates]
-  );
-
   const manualRealizedPnlTotal = useMemo(
     () =>
       relevantAccounts.reduce(
@@ -519,12 +509,11 @@ export default function DashboardPage() {
     [relevantAccounts, overrideYearOptions, fxRates]
   );
 
-  // "26년 시작금액" = 작년 말 기준 누적 투입원금 + 작년까지의 누적 실현손익 - 올해 실제로 굴리기
-  // 시작한 자본으로 보고, 올해 실현손익을 그 기준으로 나눠 수익률을 계산한다.
+  // "26년 시작금액" = 작년 말 기준 누적 투입원금 + 작년까지의 누적 실현손익. 올해 수익률은
+  // 전체 누적 실현손익을 이 시작금액으로 나눈 값 - 이게 사실상 "26년도 수익률"이 된다.
   const realizedPnlRatios = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const totalRealizedPnl = summary.realizedPnl + manualRealizedPnlTotal;
-    const toDepositedRatio = depositedTotal > 0 ? (totalRealizedPnl / depositedTotal) * 100 : null;
 
     const priorYearPrincipal =
       yearlyPrincipal.find((p) => p.year === currentYear - 1)?.principal ?? 0;
@@ -532,25 +521,11 @@ export default function DashboardPage() {
       .filter((y) => y.year <= currentYear - 1)
       .reduce((sum, y) => sum + y.amount, 0);
     const yearStartAmount = priorYearPrincipal + priorCumulativeRealized;
-    // Prefer a year-tagged 2026 figure if one exists (real 2026 transactions,
-    // or a manual yearly override); otherwise treat whatever hasn't been
-    // attributed to a prior year as this year's - this is what makes the
-    // undated account-level "실현손익 일괄 입력" lump sum (which has no year
-    // of its own) show up here instead of silently reading as 0.
-    const taggedCurrentYear = yearlyReturns.find((y) => y.year === currentYear);
-    const currentYearRealizedPnl =
-      taggedCurrentYear != null ? taggedCurrentYear.amount : totalRealizedPnl - priorCumulativeRealized;
     const toYearStartRatio =
-      yearStartAmount > 0 ? (currentYearRealizedPnl / yearStartAmount) * 100 : null;
+      yearStartAmount > 0 ? (totalRealizedPnl / yearStartAmount) * 100 : null;
 
-    return { currentYear, toDepositedRatio, toYearStartRatio, yearStartAmount };
-  }, [
-    summary.realizedPnl,
-    manualRealizedPnlTotal,
-    depositedTotal,
-    yearlyPrincipal,
-    yearlyReturns,
-  ]);
+    return { currentYear, toYearStartRatio, yearStartAmount };
+  }, [summary.realizedPnl, manualRealizedPnlTotal, yearlyPrincipal, yearlyReturns]);
 
   const foreignTaxEstimate = useMemo(
     () => estimateForeignCapitalGainsTax(filteredHoldings, new Date().getFullYear(), fxRates),
@@ -1017,7 +992,6 @@ export default function DashboardPage() {
           worstPercent={summary.worstPercent}
           currency={DISPLAY_CURRENCY}
           targetAmount={selectedAccountId === ALL_ACCOUNTS ? targetAmount : null}
-          realizedPnlRatioToDeposited={realizedPnlRatios.toDepositedRatio}
           realizedPnlRatioToYearStart={realizedPnlRatios.toYearStartRatio}
           yearStartAmount={realizedPnlRatios.yearStartAmount}
           yearStartLabel={`${realizedPnlRatios.currentYear}년`}

@@ -22,8 +22,7 @@ interface SummaryCardsProps {
   worstPercent: number;
   currency: string;
   targetAmount: number | null;
-  realizedPnlRatioToDeposited: number | null; // 실현손익 / 계좌투입금 (%)
-  realizedPnlRatioToYearStart: number | null; // 이번 해 실현손익 / 이번 해 시작금액 (%)
+  realizedPnlRatioToYearStart: number | null; // 누적 실현손익 / 이번 해 시작금액 (%) - 사실상 올해 수익률
   yearStartAmount: number; // 작년 말 투입원금 + 작년까지 누적 실현손익 (검증용 표시)
   yearStartLabel: string; // e.g. "2026년"
 }
@@ -109,7 +108,6 @@ export function SummaryCards({
   worstPercent,
   currency,
   targetAmount,
-  realizedPnlRatioToDeposited,
   realizedPnlRatioToYearStart,
   yearStartAmount,
   yearStartLabel,
@@ -185,16 +183,11 @@ export function SummaryCards({
               일괄 입력분 {formatCurrency(manualRealizedPnl, currency)} 포함
             </div>
           )}
-          {realizedPnlRatioToDeposited != null && (
-            <div className={`mt-1 text-sm tabular-nums ${deltaColorClass(realizedPnlRatioToDeposited)}`}>
-              계좌투입금 대비 {formatPercent(realizedPnlRatioToDeposited, 2)}
-            </div>
-          )}
           {realizedPnlRatioToYearStart != null && (
             <div
-              className={`text-sm tabular-nums ${deltaColorClass(realizedPnlRatioToYearStart)}`}
+              className={`mt-1 text-lg font-semibold tabular-nums ${deltaColorClass(realizedPnlRatioToYearStart)}`}
             >
-              {yearStartLabel} 시작금액 대비 {formatPercent(realizedPnlRatioToYearStart, 2)}
+              {yearStartLabel} 수익률 {formatPercent(realizedPnlRatioToYearStart, 2)}
             </div>
           )}
           {yearStartAmount > 0 && (
