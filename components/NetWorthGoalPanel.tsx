@@ -1,7 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import {
+  Cell,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { NetWorthAsset, NetWorthAssetCategory, NetWorthGoalSettings } from "@/lib/types";
 import {
   findGoalCrossingYear,
@@ -43,6 +56,14 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const PROJECTION_YEARS = 20;
+
+function formatCompactKRW(v: number): string {
+  const sign = v < 0 ? "-" : "";
+  const abs = Math.abs(v);
+  if (abs >= 100_000_000) return `${sign}${(abs / 100_000_000).toFixed(abs >= 1_000_000_000 ? 0 : 1)}억`;
+  if (abs >= 10_000) return `${sign}${(abs / 10_000).toFixed(0)}만`;
+  return `${sign}${abs}`;
+}
 
 function GoalGauge({
   label,
@@ -123,6 +144,14 @@ export function NetWorthGoalPanel({
       ? 0
       : findGoalCrossingYear(projection, goal.totalTargetAmount, (p) => p.totalValue);
 
+  const chartData = useMemo(
+    () => [
+      { year: 0, stockValue: stockTotalAssets, totalValue: totalNetWorth },
+      ...projection.map((p) => ({ year: p.year, stockValue: p.stockValue, totalValue: p.totalValue })),
+    ],
+    [projection, stockTotalAssets, totalNetWorth]
+  );
+
   const donutData = useMemo(() => {
     const byCategory = new Map<string, number>();
     byCategory.set("주식(대시보드)", stockTotalAssets);
@@ -143,7 +172,10 @@ export function NetWorthGoalPanel({
     if (!form.name.trim()) return;
     if (isRsuQuantityMode) {
       if (!Number.isFinite(rsuQuantity) || (rsuQuantity as number) <= 0) return;
-    } else if (!Number.isFinite(grossValue) || grossValue <= 0) {
+    } else if (!Number.isFinite(grossValue) || grossValue === 0) {
+      // negative values are allowed - they represent a liability (e.g. a
+      // jeonse deposit owed back to a tenant), which should subtract from
+      // net worth rather than add to it
       return;
     }
     onAddAsset({
@@ -241,6 +273,60 @@ export function NetWorthGoalPanel({
         />
       </div>
 
+      <div>
+        <h3 className="mb-2 text-xs font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+          목표 달성 시뮬레이션 (가정 유지 시 연도별 예상 자산)
+        </h3>
+        <ResponsiveContainer width="100%" height={260}>
+          <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+            <CartesianGrid stroke="#e1e0d9" strokeDasharray="0" vertical={false} />
+            <XAxis
+              dataKey="year"
+              tickFormatter={(v: number) => (v === 0 ? "현재" : `${v}년후`)}
+              tick={{ fontSize: 11, fill: "#898781" }}
+              axisLine={{ stroke: "#c3c2b7" }}
+              tickLine={false}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: "#898781" }}
+              axisLine={false}
+              tickLine={false}
+              width={56}
+              tickFormatter={formatCompactKRW}
+            />
+            <Tooltip
+              labelFormatter={(v: unknown) => (v === 0 ? "현재" : `${v}년 후`)}
+              formatter={(value: unknown, name: unknown) => [
+                formatCurrency(typeof value === "number" ? value : 0, "KRW"),
+                name === "stockValue" ? "주식" : "전체 순자산",
+              ]}
+            />
+            <Legend
+              formatter={(value: string) => (value === "stockValue" ? "주식" : "전체 순자산")}
+              wrapperStyle={{ fontSize: 11 }}
+            />
+            <ReferenceLine
+              y={goal.stockTargetAmount}
+              stroke="#2a78d6"
+              strokeDasharray="4 4"
+              label={{ value: "주식목표", position: "insideTopLeft", fontSize: 10, fill: "#2a78d6" }}
+            />
+            <ReferenceLine
+              y={goal.totalTargetAmount}
+              stroke="#eb6834"
+              strokeDasharray="4 4"
+              label={{ value: "전체목표", position: "insideBottomLeft", fontSize: 10, fill: "#eb6834" }}
+            />
+            <Line type="monotone" dataKey="stockValue" stroke="#2a78d6" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="totalValue" stroke="#eb6834" strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+        <p className="mt-1 text-xs text-ink-muted">
+          위 가정(연수익률·연간 추가납입액·기타자산 성장률)을 바꾸면 이 그래프와 목표 달성 예상
+          시점이 즉시 다시 계산됩니다.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div>
           <h3 className="mb-2 text-xs font-semibold text-ink-secondary dark:text-ink-secondary-dark">
@@ -304,8 +390,17 @@ export function NetWorthGoalPanel({
                 <div>
                   <div className="text-ink-primary dark:text-ink-primary-dark">
                     [{a.category}] {a.name}
+                    {a.rsuQuantity == null && a.grossValue < 0 && (
+                      <span className="ml-1.5 rounded bg-status-critical/15 px-1 text-xs text-status-critical">
+                        부채
+                      </span>
+                    )}
                   </div>
-                  <div className="text-xs tabular-nums text-ink-muted">
+                  <div
+                    className={`text-xs tabular-nums ${
+                      a.rsuQuantity == null && a.grossValue < 0 ? "text-status-critical" : "text-ink-muted"
+                    }`}
+                  >
                     {a.rsuQuantity != null ? (
                       <>
                         {a.rsuQuantity.toLocaleString()}주
@@ -374,7 +469,7 @@ export function NetWorthGoalPanel({
             ) : (
               <input
                 type="number"
-                placeholder="세전 금액(원)"
+                placeholder="세전 금액(원, 부채면 마이너스)"
                 value={form.grossValue}
                 onChange={(e) => setForm((f) => ({ ...f, grossValue: e.target.value }))}
                 className="rounded border border-line-hairline bg-transparent px-2 py-1.5 tabular-nums dark:border-line-hairline-dark"
@@ -418,7 +513,10 @@ export function NetWorthGoalPanel({
             RSU는 수량을 입력하면 {rsuSymbolLabel ? `${rsuSymbolLabel}의 ` : ""}현재가와 실시간
             연동되어 평가액이 자동 갱신됩니다 (시세 연동이 안 되면 직접 입력한 금액을 씁니다).
             RSU·성과급(OPI)은 세율에 예상 근로소득세 한계세율(예: 41.8, 49.5)을 입력하면 세후
-            금액이 자동 반영됩니다. 부동산·현금성은 보통 0으로 두면 됩니다.
+            금액이 자동 반영됩니다. 부동산·현금성은 보통 0으로 두면 됩니다. 세전 금액을
+            마이너스로 입력하면 부채(예: 세입자에게 돌려줘야 할 전세보증금)로 처리되어 순자산에서
+            차감됩니다 - 예: 세준 집의 시세를 부동산에 플러스로, 받은 전세보증금을 같은 부동산
+            카테고리에 마이너스로 따로 등록하면 그 집의 실제 내 지분(순자산)만 반영됩니다.
           </p>
         </div>
       </div>
