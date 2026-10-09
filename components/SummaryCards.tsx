@@ -24,6 +24,7 @@ interface SummaryCardsProps {
   targetAmount: number | null;
   realizedPnlRatioToDeposited: number | null; // 실현손익 / 계좌투입금 (%)
   realizedPnlRatioToYearStart: number | null; // 이번 해 실현손익 / 이번 해 시작금액 (%)
+  yearStartAmount: number; // 작년 말 투입원금 + 작년까지 누적 실현손익 (검증용 표시)
   yearStartLabel: string; // e.g. "2026년"
 }
 
@@ -110,6 +111,7 @@ export function SummaryCards({
   targetAmount,
   realizedPnlRatioToDeposited,
   realizedPnlRatioToYearStart,
+  yearStartAmount,
   yearStartLabel,
 }: SummaryCardsProps) {
   const totalAssets = totalStockValue + totalCash;
@@ -193,6 +195,12 @@ export function SummaryCards({
               className={`text-sm tabular-nums ${deltaColorClass(realizedPnlRatioToYearStart)}`}
             >
               {yearStartLabel} 시작금액 대비 {formatPercent(realizedPnlRatioToYearStart, 2)}
+            </div>
+          )}
+          {yearStartAmount > 0 && (
+            <div className="mt-1 text-xs tabular-nums text-ink-muted">
+              {yearStartLabel} 시작금액: {formatCurrency(yearStartAmount, currency)} (작년 말
+              투입원금 + 작년까지 누적 실현손익)
             </div>
           )}
         </div>

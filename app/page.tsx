@@ -536,7 +536,7 @@ export default function DashboardPage() {
     const toYearStartRatio =
       yearStartAmount > 0 ? (currentYearRealizedPnl / yearStartAmount) * 100 : null;
 
-    return { currentYear, toDepositedRatio, toYearStartRatio };
+    return { currentYear, toDepositedRatio, toYearStartRatio, yearStartAmount };
   }, [
     summary.realizedPnl,
     manualRealizedPnlTotal,
@@ -1012,6 +1012,7 @@ export default function DashboardPage() {
           targetAmount={selectedAccountId === ALL_ACCOUNTS ? targetAmount : null}
           realizedPnlRatioToDeposited={realizedPnlRatios.toDepositedRatio}
           realizedPnlRatioToYearStart={realizedPnlRatios.toYearStartRatio}
+          yearStartAmount={realizedPnlRatios.yearStartAmount}
           yearStartLabel={`${realizedPnlRatios.currentYear}년`}
         />
       </div>
