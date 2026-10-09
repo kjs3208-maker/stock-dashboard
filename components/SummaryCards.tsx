@@ -22,7 +22,9 @@ interface SummaryCardsProps {
   worstPercent: number;
   currency: string;
   targetAmount: number | null;
-  totalDeposited: number;
+  realizedPnlRatioToDeposited: number | null; // 실현손익 / 계좌투입금 (%)
+  realizedPnlRatioToYearStart: number | null; // 이번 해 실현손익 / 이번 해 시작금액 (%)
+  yearStartLabel: string; // e.g. "2026년"
 }
 
 function deltaColorClass(value: number): string {
@@ -106,7 +108,9 @@ export function SummaryCards({
   worstPercent,
   currency,
   targetAmount,
-  totalDeposited,
+  realizedPnlRatioToDeposited,
+  realizedPnlRatioToYearStart,
+  yearStartLabel,
 }: SummaryCardsProps) {
   const totalAssets = totalStockValue + totalCash;
 
@@ -164,16 +168,34 @@ export function SummaryCards({
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Tile
-          label="실현손익 (매도)"
-          value={`${realizedPnl >= 0 ? "+" : ""}${formatCurrency(realizedPnl, currency)}`}
-          valueClassName={deltaColorClass(realizedPnl)}
-          sub={
-            manualRealizedPnl !== 0
-              ? `일괄 입력분 ${formatCurrency(manualRealizedPnl, currency)} 포함`
-              : undefined
-          }
-        />
+        <div className="rounded-lg border border-line-hairline bg-surface p-4 dark:border-line-hairline-dark dark:bg-surface-dark">
+          <div className="text-sm text-ink-secondary dark:text-ink-secondary-dark">
+            실현손익 (매도)
+          </div>
+          <div
+            className={`mt-1 text-2xl font-semibold tabular-nums ${deltaColorClass(realizedPnl)}`}
+          >
+            {realizedPnl >= 0 ? "+" : ""}
+            {formatCurrency(realizedPnl, currency)}
+          </div>
+          {manualRealizedPnl !== 0 && (
+            <div className="mt-1 text-sm text-ink-muted">
+              일괄 입력분 {formatCurrency(manualRealizedPnl, currency)} 포함
+            </div>
+          )}
+          {realizedPnlRatioToDeposited != null && (
+            <div className={`mt-1 text-sm tabular-nums ${deltaColorClass(realizedPnlRatioToDeposited)}`}>
+              계좌투입금 대비 {formatPercent(realizedPnlRatioToDeposited, 2)}
+            </div>
+          )}
+          {realizedPnlRatioToYearStart != null && (
+            <div
+              className={`text-sm tabular-nums ${deltaColorClass(realizedPnlRatioToYearStart)}`}
+            >
+              {yearStartLabel} 시작금액 대비 {formatPercent(realizedPnlRatioToYearStart, 2)}
+            </div>
+          )}
+        </div>
         <Tile
           label="평가손익 (미실현)"
           value={`${unrealizedPnl >= 0 ? "+" : ""}${formatCurrency(unrealizedPnl, currency)}`}
@@ -208,15 +230,6 @@ export function SummaryCards({
           label="올해 목표금액 달성률 (총자산 기준)"
           current={totalAssets}
           target={targetAmount}
-          currency={currency}
-        />
-      )}
-
-      {totalDeposited > 0 && (
-        <ProgressRow
-          label="계좌투입금 대비 총자산 비율"
-          current={totalAssets}
-          target={totalDeposited}
           currency={currency}
         />
       )}

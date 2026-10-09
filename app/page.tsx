@@ -519,6 +519,32 @@ export default function DashboardPage() {
     [relevantAccounts, overrideYearOptions, fxRates]
   );
 
+  // "26년 시작금액" = 작년 말 기준 누적 투입원금 + 작년까지의 누적 실현손익 - 올해 실제로 굴리기
+  // 시작한 자본으로 보고, 올해 실현손익을 그 기준으로 나눠 수익률을 계산한다.
+  const realizedPnlRatios = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const totalRealizedPnl = summary.realizedPnl + manualRealizedPnlTotal;
+    const toDepositedRatio = depositedTotal > 0 ? (totalRealizedPnl / depositedTotal) * 100 : null;
+
+    const priorYearPrincipal =
+      yearlyPrincipal.find((p) => p.year === currentYear - 1)?.principal ?? 0;
+    const priorCumulativeRealized = yearlyReturns
+      .filter((y) => y.year <= currentYear - 1)
+      .reduce((sum, y) => sum + y.amount, 0);
+    const yearStartAmount = priorYearPrincipal + priorCumulativeRealized;
+    const currentYearRealizedPnl = yearlyReturns.find((y) => y.year === currentYear)?.amount ?? 0;
+    const toYearStartRatio =
+      yearStartAmount > 0 ? (currentYearRealizedPnl / yearStartAmount) * 100 : null;
+
+    return { currentYear, toDepositedRatio, toYearStartRatio };
+  }, [
+    summary.realizedPnl,
+    manualRealizedPnlTotal,
+    depositedTotal,
+    yearlyPrincipal,
+    yearlyReturns,
+  ]);
+
   const foreignTaxEstimate = useMemo(
     () => estimateForeignCapitalGainsTax(filteredHoldings, new Date().getFullYear(), fxRates),
     [filteredHoldings, fxRates]
@@ -984,7 +1010,9 @@ export default function DashboardPage() {
           worstPercent={summary.worstPercent}
           currency={DISPLAY_CURRENCY}
           targetAmount={selectedAccountId === ALL_ACCOUNTS ? targetAmount : null}
-          totalDeposited={depositedTotal}
+          realizedPnlRatioToDeposited={realizedPnlRatios.toDepositedRatio}
+          realizedPnlRatioToYearStart={realizedPnlRatios.toYearStartRatio}
+          yearStartLabel={`${realizedPnlRatios.currentYear}년`}
         />
       </div>
 
