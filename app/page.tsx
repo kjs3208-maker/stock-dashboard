@@ -532,7 +532,14 @@ export default function DashboardPage() {
       .filter((y) => y.year <= currentYear - 1)
       .reduce((sum, y) => sum + y.amount, 0);
     const yearStartAmount = priorYearPrincipal + priorCumulativeRealized;
-    const currentYearRealizedPnl = yearlyReturns.find((y) => y.year === currentYear)?.amount ?? 0;
+    // Prefer a year-tagged 2026 figure if one exists (real 2026 transactions,
+    // or a manual yearly override); otherwise treat whatever hasn't been
+    // attributed to a prior year as this year's - this is what makes the
+    // undated account-level "실현손익 일괄 입력" lump sum (which has no year
+    // of its own) show up here instead of silently reading as 0.
+    const taggedCurrentYear = yearlyReturns.find((y) => y.year === currentYear);
+    const currentYearRealizedPnl =
+      taggedCurrentYear != null ? taggedCurrentYear.amount : totalRealizedPnl - priorCumulativeRealized;
     const toYearStartRatio =
       yearStartAmount > 0 ? (currentYearRealizedPnl / yearStartAmount) * 100 : null;
 
