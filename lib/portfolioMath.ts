@@ -1,4 +1,4 @@
-import { Account, Dividend, Holding, Quote, Transaction } from "./types";
+import { Account, Dividend, Holding, NetWorthAsset, NetWorthGoalSettings, Quote, Transaction } from "./types";
 import { YearlyReturnOverrides } from "./storage";
 import { convertFromKRW, convertToKRW } from "./fx";
 
@@ -374,4 +374,59 @@ export function estimateForeignCapitalGainsTax(
     taxableAmount,
     estimatedTax,
   };
+}
+
+/** Net-of-tax value of a single net-worth asset (부동산/RSU/OPI/현금성/기타). */
+export function netWorthAssetNetValue(asset: NetWorthAsset): number {
+  const rate = Math.min(100, Math.max(0, asset.taxRatePercent)) / 100;
+  return asset.grossValue * (1 - rate);
+}
+
+export function sumNetWorthAssets(assets: NetWorthAsset[]): number {
+  return assets.reduce((sum, a) => sum + netWorthAssetNetValue(a), 0);
+}
+
+export interface NetWorthProjectionPoint {
+  year: number; // years from now (1-indexed)
+  stockValue: number;
+  otherValue: number;
+  totalValue: number;
+}
+
+/**
+ * Projects stock portfolio value (compounding at the assumed annual return,
+ * plus a fixed annual contribution added at each year's end) and other
+ * net-worth assets (compounding at a separate, usually much lower, assumed
+ * growth rate with no further contributions) forward year by year. This is
+ * a straight-line "what if the assumptions hold" projection, not a forecast -
+ * real markets don't compound smoothly like this.
+ */
+export function projectNetWorth(
+  currentStockValue: number,
+  currentOtherValue: number,
+  settings: NetWorthGoalSettings,
+  yearsAhead: number
+): NetWorthProjectionPoint[] {
+  const stockRate = settings.assumedAnnualReturnPercent / 100;
+  const otherRate = settings.otherAssetAnnualGrowthPercent / 100;
+  let stock = currentStockValue;
+  let other = currentOtherValue;
+  const points: NetWorthProjectionPoint[] = [];
+  for (let year = 1; year <= yearsAhead; year++) {
+    stock = stock * (1 + stockRate) + settings.assumedAnnualStockContribution;
+    other = other * (1 + otherRate);
+    points.push({ year, stockValue: stock, otherValue: other, totalValue: stock + other });
+  }
+  return points;
+}
+
+/** First projection year at which `pick(point)` reaches `target`, or null if never within the horizon. */
+export function findGoalCrossingYear(
+  points: NetWorthProjectionPoint[],
+  target: number,
+  pick: (p: NetWorthProjectionPoint) => number
+): number | null {
+  if (target <= 0) return null;
+  const found = points.find((p) => pick(p) >= target);
+  return found ? found.year : null;
 }

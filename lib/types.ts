@@ -99,6 +99,26 @@ export interface NewsItem {
   publishedAt: string; // ISO date
 }
 
+export type NetWorthAssetCategory = "부동산" | "RSU" | "성과급(OPI)" | "현금성" | "기타";
+
+export interface NetWorthAsset {
+  id: string;
+  category: NetWorthAssetCategory;
+  name: string; // e.g. "자가주택", "전세보증금", "삼성전자 RSU"
+  grossValue: number; // 세전 평가액/예정액, KRW
+  taxRatePercent: number; // 적용 세율(%) - RSU/OPI는 근로소득세 한계세율, 그 외는 보통 0
+  note?: string;
+  updatedAt: string; // ISO date
+}
+
+export interface NetWorthGoalSettings {
+  totalTargetAmount: number; // 전체 순자산 목표 (KRW), e.g. 100억
+  stockTargetAmount: number; // 그중 주식 포트폴리오 목표 (KRW), e.g. 50억
+  assumedAnnualReturnPercent: number; // 주식 포트폴리오 가정 연수익률(%)
+  assumedAnnualStockContribution: number; // 주식 계좌 연간 추가납입 가정액 (KRW)
+  otherAssetAnnualGrowthPercent: number; // 주식 외 자산(부동산 등) 가정 연성장률(%)
+}
+
 export type ResearchNoteCategory = "종목분석" | "인사이트" | "일반";
 
 export interface ResearchNote {

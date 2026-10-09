@@ -5,6 +5,9 @@ import {
   Account,
   Holding,
   HistoryPoint,
+  NetWorthAsset,
+  NetWorthAssetCategory,
+  NetWorthGoalSettings,
   Quote,
   ResearchNote,
   ResearchNoteCategory,
@@ -16,18 +19,24 @@ import {
   createAccountDepositId,
   createDividendId,
   createHoldingId,
+  createNetWorthAssetId,
   createResearchNoteId,
   createTransactionId,
   createWatchlistId,
+  DEFAULT_NET_WORTH_GOAL,
   importBackup,
   loadAccounts,
   loadHoldings,
+  loadNetWorthAssets,
+  loadNetWorthGoal,
   loadResearchNotes,
   loadTargetAmount,
   loadWatchlist,
   loadYearlyReturnOverrides,
   saveAccounts,
   saveHoldings,
+  saveNetWorthAssets,
+  saveNetWorthGoal,
   saveResearchNotes,
   saveTargetAmount,
   saveWatchlist,
@@ -75,6 +84,7 @@ import { ResearchNotesPanel } from "@/components/ResearchNotesPanel";
 import { InsightCollector } from "@/components/InsightCollector";
 import { ReportUploadPanel } from "@/components/ReportUploadPanel";
 import { AccountDepositsPanel } from "@/components/AccountDepositsPanel";
+import { NetWorthGoalPanel } from "@/components/NetWorthGoalPanel";
 
 const DISPLAY_CURRENCY = "KRW";
 const ALL_ACCOUNTS = "all";
@@ -109,6 +119,8 @@ export default function DashboardPage() {
   const [syncBusy, setSyncBusy] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [researchNotes, setResearchNotes] = useState<ResearchNote[]>([]);
+  const [netWorthAssets, setNetWorthAssets] = useState<NetWorthAsset[]>([]);
+  const [netWorthGoal, setNetWorthGoal] = useState<NetWorthGoalSettings>(DEFAULT_NET_WORTH_GOAL);
 
   // Fetch exchange rates once - used to combine holdings/accounts that
   // aren't all in the same currency into one meaningful total.
@@ -140,6 +152,8 @@ export default function DashboardPage() {
     setYearlyOverrides(loadYearlyReturnOverrides());
     setWatchlist(loadWatchlist());
     setResearchNotes(loadResearchNotes());
+    setNetWorthAssets(loadNetWorthAssets());
+    setNetWorthGoal(loadNetWorthGoal());
     /* eslint-enable react-hooks/set-state-in-effect */
     setHydrated(true);
   }, []);
@@ -162,6 +176,12 @@ export default function DashboardPage() {
   useEffect(() => {
     if (hydrated) saveResearchNotes(researchNotes);
   }, [researchNotes, hydrated]);
+  useEffect(() => {
+    if (hydrated) saveNetWorthAssets(netWorthAssets);
+  }, [netWorthAssets, hydrated]);
+  useEffect(() => {
+    if (hydrated) saveNetWorthGoal(netWorthGoal);
+  }, [netWorthGoal, hydrated]);
 
   // Once local state is loaded, see if server-side sync (Upstash + a shared
   // passcode) is configured at all. If it is and this device already knows
@@ -181,6 +201,8 @@ export default function DashboardPage() {
           setYearlyOverrides(result.payload.data.yearlyReturnOverrides ?? {});
           setWatchlist(result.payload.data.watchlist ?? []);
           setResearchNotes(result.payload.data.researchNotes ?? []);
+          setNetWorthAssets(result.payload.data.netWorthAssets ?? []);
+          setNetWorthGoal(result.payload.data.netWorthGoal ?? DEFAULT_NET_WORTH_GOAL);
           setLastSyncedAt(result.payload.updatedAt);
         }
       }
@@ -205,6 +227,8 @@ export default function DashboardPage() {
       yearlyReturnOverrides: yearlyOverrides,
       watchlist,
       researchNotes,
+      netWorthAssets,
+      netWorthGoal,
     };
     const timeout = setTimeout(() => {
       pushRemoteState(passcode, data).then((ok) => {
@@ -219,6 +243,8 @@ export default function DashboardPage() {
     yearlyOverrides,
     watchlist,
     researchNotes,
+    netWorthAssets,
+    netWorthGoal,
     hydrated,
     syncStatus,
   ]);
@@ -240,6 +266,8 @@ export default function DashboardPage() {
         setYearlyOverrides(result.payload.data.yearlyReturnOverrides ?? {});
         setWatchlist(result.payload.data.watchlist ?? []);
         setResearchNotes(result.payload.data.researchNotes ?? []);
+        setNetWorthAssets(result.payload.data.netWorthAssets ?? []);
+        setNetWorthGoal(result.payload.data.netWorthGoal ?? DEFAULT_NET_WORTH_GOAL);
         setLastSyncedAt(result.payload.updatedAt);
       } else {
         const data: BackupData = {
@@ -251,6 +279,8 @@ export default function DashboardPage() {
           yearlyReturnOverrides: yearlyOverrides,
           watchlist,
           researchNotes,
+          netWorthAssets,
+          netWorthGoal,
         };
         pushRemoteState(passcode, data).then((ok) => {
           if (ok) setLastSyncedAt(data.exportedAt);
@@ -668,6 +698,29 @@ export default function DashboardPage() {
     setYearlyOverrides(data.yearlyReturnOverrides ?? {});
     setWatchlist(data.watchlist ?? []);
     setResearchNotes(data.researchNotes ?? []);
+    setNetWorthAssets(data.netWorthAssets ?? []);
+    setNetWorthGoal(data.netWorthGoal ?? DEFAULT_NET_WORTH_GOAL);
+  }
+
+  function handleAddNetWorthAsset(asset: {
+    category: NetWorthAssetCategory;
+    name: string;
+    grossValue: number;
+    taxRatePercent: number;
+    note?: string;
+  }) {
+    setNetWorthAssets((prev) => [
+      ...prev,
+      { id: createNetWorthAssetId(), updatedAt: new Date().toISOString(), ...asset },
+    ]);
+  }
+
+  function handleDeleteNetWorthAsset(id: string) {
+    setNetWorthAssets((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  function handleUpdateNetWorthGoal(patch: Partial<NetWorthGoalSettings>) {
+    setNetWorthGoal((prev) => ({ ...prev, ...patch }));
   }
 
   function handleAddResearchNote(note: {
@@ -872,6 +925,20 @@ export default function DashboardPage() {
           totalDeposited={depositedTotal}
         />
       </div>
+
+      <section className="mb-6 rounded-lg border border-line-hairline p-4 dark:border-line-hairline-dark">
+        <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">
+          순자산 목표 (주식 외 자산 포함)
+        </h2>
+        <NetWorthGoalPanel
+          stockTotalAssets={summary.totalStockValue + cashTotal}
+          assets={netWorthAssets}
+          goal={netWorthGoal}
+          onAddAsset={handleAddNetWorthAsset}
+          onDeleteAsset={handleDeleteNetWorthAsset}
+          onUpdateGoal={handleUpdateNetWorthGoal}
+        />
+      </section>
 
       <section className="mb-6">
         <h2 className="mb-3 text-sm font-semibold text-ink-secondary dark:text-ink-secondary-dark">

@@ -3,6 +3,8 @@ import {
   AccountDeposit,
   Dividend,
   Holding,
+  NetWorthAsset,
+  NetWorthGoalSettings,
   ResearchNote,
   Transaction,
   WatchlistItem,
@@ -14,6 +16,16 @@ const TARGET_AMOUNT_KEY = "stock-dashboard.targetAmount.v1";
 const YEARLY_OVERRIDES_KEY = "stock-dashboard.yearlyReturnOverrides.v1";
 const WATCHLIST_KEY = "stock-dashboard.watchlist.v1";
 const RESEARCH_NOTES_KEY = "stock-dashboard.researchNotes.v1";
+const NET_WORTH_ASSETS_KEY = "stock-dashboard.netWorthAssets.v1";
+const NET_WORTH_GOAL_KEY = "stock-dashboard.netWorthGoal.v1";
+
+export const DEFAULT_NET_WORTH_GOAL: NetWorthGoalSettings = {
+  totalTargetAmount: 10_000_000_000,
+  stockTargetAmount: 5_000_000_000,
+  assumedAnnualReturnPercent: 15,
+  assumedAnnualStockContribution: 40_000_000,
+  otherAssetAnnualGrowthPercent: 4,
+};
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";
@@ -52,6 +64,10 @@ export function createResearchNoteId(): string {
 
 export function createAccountDepositId(): string {
   return createId("ad");
+}
+
+export function createNetWorthAssetId(): string {
+  return createId("nw");
 }
 
 // Pre-transactions holdings stored a single quantity/avgBuyPrice/buyDate.
@@ -285,6 +301,53 @@ export function saveResearchNotes(notes: ResearchNote[]): void {
   }
 }
 
+export function loadNetWorthAssets(): NetWorthAsset[] {
+  if (!isBrowser()) return [];
+  try {
+    const raw = window.localStorage.getItem(NET_WORTH_ASSETS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as NetWorthAsset[]).map((a) => ({
+      ...a,
+      taxRatePercent: a.taxRatePercent ?? 0,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export function saveNetWorthAssets(assets: NetWorthAsset[]): void {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.setItem(NET_WORTH_ASSETS_KEY, JSON.stringify(assets));
+  } catch {
+    // ignore
+  }
+}
+
+export function loadNetWorthGoal(): NetWorthGoalSettings {
+  if (!isBrowser()) return DEFAULT_NET_WORTH_GOAL;
+  try {
+    const raw = window.localStorage.getItem(NET_WORTH_GOAL_KEY);
+    if (!raw) return DEFAULT_NET_WORTH_GOAL;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return DEFAULT_NET_WORTH_GOAL;
+    return { ...DEFAULT_NET_WORTH_GOAL, ...(parsed as Partial<NetWorthGoalSettings>) };
+  } catch {
+    return DEFAULT_NET_WORTH_GOAL;
+  }
+}
+
+export function saveNetWorthGoal(goal: NetWorthGoalSettings): void {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.setItem(NET_WORTH_GOAL_KEY, JSON.stringify(goal));
+  } catch {
+    // ignore
+  }
+}
+
 export interface BackupData {
   version: 1;
   exportedAt: string;
@@ -294,6 +357,8 @@ export interface BackupData {
   yearlyReturnOverrides: YearlyReturnOverrides;
   watchlist: WatchlistItem[];
   researchNotes?: ResearchNote[];
+  netWorthAssets?: NetWorthAsset[];
+  netWorthGoal?: NetWorthGoalSettings;
 }
 
 export function exportBackup(): BackupData {
@@ -306,6 +371,8 @@ export function exportBackup(): BackupData {
     yearlyReturnOverrides: loadYearlyReturnOverrides(),
     watchlist: loadWatchlist(),
     researchNotes: loadResearchNotes(),
+    netWorthAssets: loadNetWorthAssets(),
+    netWorthGoal: loadNetWorthGoal(),
   };
 }
 
@@ -316,4 +383,6 @@ export function importBackup(data: BackupData): void {
   if (data.yearlyReturnOverrides) saveYearlyReturnOverrides(data.yearlyReturnOverrides);
   if (Array.isArray(data.watchlist)) saveWatchlist(data.watchlist);
   if (Array.isArray(data.researchNotes)) saveResearchNotes(data.researchNotes);
+  if (Array.isArray(data.netWorthAssets)) saveNetWorthAssets(data.netWorthAssets);
+  if (data.netWorthGoal) saveNetWorthGoal(data.netWorthGoal);
 }
